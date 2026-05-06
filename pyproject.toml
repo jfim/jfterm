@@ -1,0 +1,28 @@
+[project]
+name = "jfterm"
+version = "0.1.0"
+description = "A GNOME terminal that groups tabs by project."
+authors = [
+    { name = "Jean-Francois Im", email = "jeanfrancois.im@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+jfterm = "jfterm:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
+
+[tool.uv]
+# Use the system python so the venv (created with --system-site-packages)
+# can see the apt-installed PyGObject / VTE bindings without rebuilding
+# pycairo + pygobject from source. If you recreate the venv, run:
+#   uv venv --system-site-packages --python /usr/bin/python3
+python-preference = "only-system"
