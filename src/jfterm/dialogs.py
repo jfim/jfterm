@@ -77,7 +77,7 @@ def show_project_dialog(
     cancel_btn.connect("clicked", lambda _b: dlg.close())
 
     if on_disband is not None:
-        disband_btn = Gtk.Button(label="Disband")
+        disband_btn = Gtk.Button(label="Delete project")
         disband_btn.add_css_class("destructive-action")
 
         def _on_disband_clicked(_b):
