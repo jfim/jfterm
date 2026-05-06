@@ -46,6 +46,11 @@ class Sidebar(Gtk.ScrolledWindow):
             self._box.remove(child)
             child = nxt
 
+        new_proj_btn = Gtk.Button(label="+ New project")
+        new_proj_btn.add_css_class("flat")
+        new_proj_btn.connect("clicked", lambda _b: self.emit("new-project-requested"))
+        self._box.append(new_proj_btn)
+
         for project in self._ws.projects:
             self._add_project_row(project)
             if project.expanded:
@@ -53,15 +58,11 @@ class Sidebar(Gtk.ScrolledWindow):
                     self._add_tab_row(project, tab)
                 self._add_drop_sentinel(project)
 
-        new_proj_btn = Gtk.Button(label="+ New project")
-        new_proj_btn.add_css_class("flat")
-        new_proj_btn.connect("clicked", lambda _b: self.emit("new-project-requested"))
-        self._box.append(new_proj_btn)
-
         self._add_unsorted_row(self._ws.unsorted)
-        for tab in self._ws.unsorted.tabs:
-            self._add_tab_row(self._ws.unsorted, tab)
-        self._add_drop_sentinel(self._ws.unsorted)
+        if self._ws.unsorted.expanded:
+            for tab in self._ws.unsorted.tabs:
+                self._add_tab_row(self._ws.unsorted, tab)
+            self._add_drop_sentinel(self._ws.unsorted)
 
     # --- DnD helpers ---
 
@@ -146,8 +147,23 @@ class Sidebar(Gtk.ScrolledWindow):
         row.set_margin_start(4)
         row.set_margin_end(4)
 
-        label = Gtk.Label(label="Unsorted", xalign=0)
-        label.set_hexpand(True)
+        chevron = Gtk.Button.new_from_icon_name(
+            "pan-down-symbolic" if group.expanded else "pan-end-symbolic"
+        )
+        chevron.add_css_class("flat")
+        chevron.connect(
+            "clicked",
+            lambda _b, g=group: self.emit("toggle-expanded-requested", g),
+        )
+
+        label_btn = Gtk.Button(label="Unsorted")
+        label_btn.add_css_class("flat")
+        label_btn.set_hexpand(True)
+        label_btn.set_halign(Gtk.Align.START)
+        label_btn.connect(
+            "clicked",
+            lambda _b, g=group: self.emit("toggle-expanded-requested", g),
+        )
 
         plus = Gtk.Button.new_from_icon_name("list-add-symbolic")
         plus.add_css_class("flat")
@@ -155,8 +171,8 @@ class Sidebar(Gtk.ScrolledWindow):
             "clicked", lambda _b, g=group: self.emit("new-tab-requested", g)
         )
 
-        row.append(label)
-        row.append(plus)
+        for w in (chevron, label_btn, plus):
+            row.append(w)
         self._box.append(row)
 
     def _add_tab_row(self, group: Group, tab: Tab) -> None:

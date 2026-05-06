@@ -39,6 +39,10 @@ class Group:
 class Unsorted(Group):
     name = "Unsorted"
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.expanded: bool = True
+
 
 class Project(Group):
     def __init__(

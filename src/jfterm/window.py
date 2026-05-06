@@ -181,8 +181,8 @@ class JFTermWindow(Adw.ApplicationWindow):
             on_disband=_disband,
         )
 
-    def _on_toggle_expanded(self, _sb, project: Project) -> None:
-        project.expanded = not project.expanded
+    def _on_toggle_expanded(self, _sb, group: Group) -> None:
+        group.expanded = not group.expanded
         save_projects(self.ws, default_path())
         self.sidebar.refresh()
 

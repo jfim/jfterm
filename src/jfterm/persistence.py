@@ -22,6 +22,7 @@ def load_projects(ws: Workspace, path: Path) -> None:
         # Stash unknown fields for forward compatibility.
         p._extra = {k: v for k, v in entry.items() if k not in _KNOWN_FIELDS}
         ws.projects.append(p)
+    ws.unsorted.expanded = data.get("unsorted_expanded", True)
 
 
 def save_projects(ws: Workspace, path: Path) -> None:
@@ -38,6 +39,7 @@ def save_projects(ws: Workspace, path: Path) -> None:
             }
             for p in ws.projects
         ],
+        "unsorted_expanded": ws.unsorted.expanded,
     }
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2))
