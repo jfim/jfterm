@@ -44,7 +44,11 @@ class JFTermWindow(Adw.ApplicationWindow):
         paned.set_start_child(self.sidebar)
         paned.set_end_child(self.terminal_stack)
         paned.set_shrink_start_child(False)
-        paned.set_position(220)
+        paned.set_position(self.ws.sidebar_width)
+        # Persist width on drag, debounced so we don't write on every pixel.
+        self._paned = paned
+        self._sidebar_save_source: int | None = None
+        paned.connect("notify::position", self._on_paned_position_changed)
 
         toolbar = Adw.ToolbarView()
         toolbar.add_top_bar(Adw.HeaderBar())
@@ -289,6 +293,21 @@ class JFTermWindow(Adw.ApplicationWindow):
             self._current_group = self.ws._find_group(nxt)
             self.terminal_stack.set_visible_child(nxt.terminal)
             nxt.terminal.grab_focus()
+
+    def _on_paned_position_changed(self, _paned, _pspec) -> None:
+        from gi.repository import GLib
+
+        self.ws.sidebar_width = self._paned.get_position()
+        if self._sidebar_save_source is not None:
+            GLib.source_remove(self._sidebar_save_source)
+
+        def _flush() -> bool:
+            save_projects(self.ws, default_path())
+            self._sidebar_save_source = None
+            return False
+
+        # 500ms after the user stops dragging, write to disk.
+        self._sidebar_save_source = GLib.timeout_add(500, _flush)
 
     def _show_group_empty(self, group: Group) -> None:
         if isinstance(group, Project):

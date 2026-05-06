@@ -23,6 +23,7 @@ def load_projects(ws: Workspace, path: Path) -> None:
         p._extra = {k: v for k, v in entry.items() if k not in _KNOWN_FIELDS}
         ws.projects.append(p)
     ws.unsorted.expanded = data.get("unsorted_expanded", True)
+    ws.sidebar_width = int(data.get("sidebar_width", ws.sidebar_width))
 
 
 def save_projects(ws: Workspace, path: Path) -> None:
@@ -40,6 +41,7 @@ def save_projects(ws: Workspace, path: Path) -> None:
             for p in ws.projects
         ],
         "unsorted_expanded": ws.unsorted.expanded,
+        "sidebar_width": ws.sidebar_width,
     }
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2))

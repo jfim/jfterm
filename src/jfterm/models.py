@@ -65,6 +65,7 @@ class Workspace:
     def __init__(self) -> None:
         self.projects: list[Project] = []
         self.unsorted = Unsorted()
+        self.sidebar_width: int = 220
 
     def add_project(self, name: str, directory: str) -> Project:
         p = Project(name=name, directory=directory)
