@@ -1,4 +1,6 @@
-from gi.repository import Adw, Gtk
+from gi.repository import Adw
+
+from jfterm.terminal import JFTermTerminal
 
 
 class JFTermWindow(Adw.ApplicationWindow):
@@ -7,7 +9,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.set_default_size(1100, 700)
 
         header = Adw.HeaderBar()
-        content = Gtk.Label(label="JFTerm — empty")
+        content = JFTermTerminal()
         content.set_vexpand(True)
         content.set_hexpand(True)
 
