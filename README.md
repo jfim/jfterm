@@ -1,11 +1,9 @@
 # JFTerm
 
+![JFTerm screenshot](images/screenshot.png)
+
 A terminal for GNOME that uses tabs and per-project groupings. Uses VTE for the
 actual terminal.
-
-See [docs/superpowers/specs/2026-05-06-jfterm-v1-design.md](docs/superpowers/specs/2026-05-06-jfterm-v1-design.md)
-for the full design and [docs/superpowers/plans/2026-05-06-jfterm-v1.md](docs/superpowers/plans/2026-05-06-jfterm-v1.md)
-for the implementation plan.
 
 ## Running
 
