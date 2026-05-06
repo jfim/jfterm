@@ -39,6 +39,18 @@ has a bash snippet that does this. Without OSC 133 the indicator falls back to
 polling `tcgetpgrp` every 250 ms, which still works but with slightly higher
 latency.
 
+## Status dot
+
+Each tab row has a status dot with two visual axes:
+
+**Color — running state:**
+- **Blue:** a foreground subprocess is running in the tab's shell.
+- **Grey:** the shell is at its prompt.
+
+**Fill — in-place state** (*filled = tab is in the right home; outline = the tab could be moved*; clicking the dot opens a "Move To" menu):
+- Tab in a **project:** filled if the cwd is inside the project's directory, outline otherwise.
+- Tab in **Unsorted:** filled if the cwd matches no project, outline if it's inside some project's directory.
+
 ## Development
 
     uv run pytest -v
