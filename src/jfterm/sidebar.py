@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from gi.repository import GObject, Gtk
+from typing import Callable
 
+from gi.repository import Gdk, GObject, Gtk
+
+from jfterm.matching import is_inside, matching_projects
 from jfterm.models import Group, Project, Tab, Workspace
+from jfterm.status_dot import StatusDot
 
 
 class Sidebar(Gtk.ScrolledWindow):
@@ -18,6 +22,8 @@ class Sidebar(Gtk.ScrolledWindow):
         "configure-project-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "new-project-requested": (GObject.SignalFlags.RUN_FIRST, None, ()),
         "toggle-expanded-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
+        "dot-clicked": (GObject.SignalFlags.RUN_FIRST, None, (object, object, object)),
+        "tab-dropped": (GObject.SignalFlags.RUN_FIRST, None, (object, object, int)),
     }
 
     def __init__(self, ws: Workspace) -> None:
@@ -45,6 +51,7 @@ class Sidebar(Gtk.ScrolledWindow):
             if project.expanded:
                 for tab in project.tabs:
                     self._add_tab_row(project, tab)
+                self._add_drop_sentinel(project)
 
         new_proj_btn = Gtk.Button(label="+ New project")
         new_proj_btn.add_css_class("flat")
@@ -54,6 +61,43 @@ class Sidebar(Gtk.ScrolledWindow):
         self._add_unsorted_row(self._ws.unsorted)
         for tab in self._ws.unsorted.tabs:
             self._add_tab_row(self._ws.unsorted, tab)
+        self._add_drop_sentinel(self._ws.unsorted)
+
+    # --- DnD helpers ---
+
+    def _attach_drag(self, row: Gtk.Widget, tab: Tab) -> None:
+        src = Gtk.DragSource()
+        src.set_actions(Gdk.DragAction.MOVE)
+
+        def _prepare(_s, _x, _y):
+            v = GObject.Value()
+            v.init(GObject.TYPE_PYOBJECT)
+            v.set_object(tab)
+            return Gdk.ContentProvider.new_for_value(v)
+
+        src.connect("prepare", _prepare)
+        row.add_controller(src)
+
+    def _attach_drop(
+        self,
+        row: Gtk.Widget,
+        target_group: Group,
+        target_position_callable: Callable[[], int],
+    ) -> None:
+        target = Gtk.DropTarget.new(GObject.TYPE_PYOBJECT, Gdk.DragAction.MOVE)
+
+        def _on_drop(_t, value, _x, _y):
+            self.emit("tab-dropped", value, target_group, target_position_callable())
+            return True
+
+        target.connect("drop", _on_drop)
+        row.add_controller(target)
+
+    def _add_drop_sentinel(self, group: Group) -> None:
+        sentinel = Gtk.Box()
+        sentinel.set_size_request(-1, 6)
+        self._attach_drop(sentinel, group, lambda g=group: len(g.tabs))
+        self._box.append(sentinel)
 
     # --- row builders ---
 
@@ -120,10 +164,31 @@ class Sidebar(Gtk.ScrolledWindow):
         row.set_margin_start(20)
         row.set_margin_end(4)
 
-        title = Gtk.Button(label=tab.title or "tab")
+        dot = StatusDot()
+        dot.set_valign(Gtk.Align.CENTER)
+        if isinstance(group, Project):
+            filled = is_inside(tab.current_cwd, group.directory)
+        else:
+            # Unsorted: filled when no project would match.
+            filled = not matching_projects(tab.current_cwd, self._ws.projects)
+        dot.set_state(running=tab.is_running, filled=filled)
+        tab._dot = dot  # so the runtime layer can update without a full refresh
+        dot.connect(
+            "clicked",
+            lambda _d, t=tab, g=group, anchor=dot: self.emit(
+                "dot-clicked", t, g, anchor
+            ),
+        )
+
+        title = Gtk.Button()
         title.add_css_class("flat")
         title.set_hexpand(True)
         title.set_halign(Gtk.Align.START)
+        title_label = Gtk.Label(label=tab.title or "tab", xalign=0)
+        from gi.repository import Pango
+        title_label.set_ellipsize(Pango.EllipsizeMode.END)
+        title_label.set_max_width_chars(24)
+        title.set_child(title_label)
         title.connect("clicked", lambda _b, t=tab: self.emit("tab-activated", t))
 
         close = Gtk.Button.new_from_icon_name("window-close-symbolic")
@@ -132,6 +197,12 @@ class Sidebar(Gtk.ScrolledWindow):
             "clicked", lambda _b, t=tab: self.emit("close-tab-requested", t)
         )
 
-        row.append(title)
-        row.append(close)
+        # DnD: the row is both a drag source (carrying the tab) and a drop
+        # target (drop above this row, taking this row's index).
+        position_in_group = group.tabs.index(tab)
+        self._attach_drag(row, tab)
+        self._attach_drop(row, group, lambda pos=position_in_group: pos)
+
+        for w in (dot, title, close):
+            row.append(w)
         self._box.append(row)

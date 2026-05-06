@@ -60,6 +60,24 @@ class JFTermWindow(Adw.ApplicationWindow):
             "configure-project-requested", self._on_configure_project
         )
         self.sidebar.connect("toggle-expanded-requested", self._on_toggle_expanded)
+        self.sidebar.connect("dot-clicked", self._on_dot_clicked)
+        self.sidebar.connect("tab-dropped", self._on_tab_dropped)
+
+        # Keyboard shortcuts
+        from jfterm.shortcuts import install as install_shortcuts
+
+        install_shortcuts(self, actions={
+            "win.new-tab": self._shortcut_new_tab,
+            "win.close-tab": self._shortcut_close_tab,
+            "win.next-tab": self._shortcut_next_tab,
+            "win.prev-tab": self._shortcut_prev_tab,
+        })
+        app = self.get_application()
+        if app is not None:
+            app.set_accels_for_action("win.new-tab", ["<Control><Shift>t"])
+            app.set_accels_for_action("win.close-tab", ["<Control><Shift>w"])
+            app.set_accels_for_action("win.next-tab", ["<Control>Page_Down"])
+            app.set_accels_for_action("win.prev-tab", ["<Control>Page_Up"])
 
     # --- handlers ---
 
@@ -74,6 +92,18 @@ class JFTermWindow(Adw.ApplicationWindow):
         terminal.set_vexpand(True)
         terminal.set_hexpand(True)
         tab = Tab(title="(starting…)", terminal=terminal)
+        terminal.connect(
+            "cwd-changed",
+            lambda _t, path, t=tab: self._on_tab_cwd_changed(t, path),
+        )
+        terminal.connect(
+            "running-changed",
+            lambda _t, running, t=tab: self._on_tab_running_changed(t, running),
+        )
+        terminal.connect(
+            "title-changed",
+            lambda _t, title, t=tab: self._on_tab_title_changed(t, title),
+        )
         self.terminal_stack.add_child(terminal)
         group.add_tab(tab)
         self._current_group = group
@@ -147,7 +177,108 @@ class JFTermWindow(Adw.ApplicationWindow):
         save_projects(self.ws, default_path())
         self.sidebar.refresh()
 
+    def _on_dot_clicked(self, _sb, tab: Tab, current_group: Group, anchor) -> None:
+        from jfterm.menus import build_move_to_popover
+
+        def _move(dest: Group) -> None:
+            self.ws.move_tab(tab, dest)
+            if (
+                tab.terminal is not None
+                and self.terminal_stack.get_visible_child() is tab.terminal
+            ):
+                self._current_group = dest
+            self._refresh_tab_dot(tab)
+            self.sidebar.refresh()
+
+        pop = build_move_to_popover(self.ws, tab, current_group, on_move=_move)
+        pop.set_parent(anchor)
+        pop.popup()
+
+    def _on_tab_dropped(
+        self, _sb, tab: Tab, dest_group: Group, position: int
+    ) -> None:
+        # Within-group + drop below source: removing first shifts indices.
+        src_group = self.ws._find_group(tab)
+        adjusted = position
+        if src_group is dest_group:
+            src_idx = src_group.tabs.index(tab)
+            if src_idx < position:
+                adjusted -= 1
+        self.ws.move_tab(tab, dest_group, position=adjusted)
+        if (
+            tab.terminal is not None
+            and self.terminal_stack.get_visible_child() is tab.terminal
+        ):
+            self._current_group = dest_group
+        self._refresh_tab_dot(tab)
+        self.sidebar.refresh()
+
+    def _on_tab_cwd_changed(self, tab: Tab, path: str) -> None:
+        tab.current_cwd = path
+        self._refresh_tab_dot(tab)
+
+    def _on_tab_running_changed(self, tab: Tab, running: bool) -> None:
+        if tab.is_running == running:
+            return
+        tab.is_running = running
+        self._refresh_tab_dot(tab)
+
+    def _on_tab_title_changed(self, tab: Tab, title: str) -> None:
+        tab.title = title
+        self.sidebar.refresh()
+
     # --- helpers ---
+
+    def _refresh_tab_dot(self, tab: Tab) -> None:
+        from jfterm.matching import is_inside, matching_projects
+
+        try:
+            group = self.ws._find_group(tab)
+        except ValueError:
+            return
+        if isinstance(group, Project):
+            filled = is_inside(tab.current_cwd, group.directory)
+        else:
+            filled = not matching_projects(tab.current_cwd, self.ws.projects)
+        if hasattr(tab, "_dot") and tab._dot is not None:
+            tab._dot.set_state(running=tab.is_running, filled=filled)
+
+    # --- shortcut handlers ---
+
+    def _shortcut_new_tab(self) -> None:
+        cur = self._current_tab()
+        group = self.ws._find_group(cur) if cur is not None else self.ws.unsorted
+        self._on_new_tab(self.sidebar, group)
+
+    def _shortcut_close_tab(self) -> None:
+        t = self._current_tab()
+        if t is not None:
+            self._on_close_tab(self.sidebar, t)
+
+    def _shortcut_next_tab(self) -> None:
+        self._cycle_tab(+1)
+
+    def _shortcut_prev_tab(self) -> None:
+        self._cycle_tab(-1)
+
+    def _current_tab(self) -> Tab | None:
+        visible = self.terminal_stack.get_visible_child()
+        for g in self.ws.all_groups():
+            for t in g.tabs:
+                if t.terminal is visible:
+                    return t
+        return None
+
+    def _cycle_tab(self, delta: int) -> None:
+        flat = [t for g in self.ws.all_groups() for t in g.tabs]
+        if not flat:
+            return
+        cur = self._current_tab()
+        idx = flat.index(cur) if cur in flat else -1
+        nxt = flat[(idx + delta) % len(flat)]
+        if nxt.terminal is not None:
+            self._current_group = self.ws._find_group(nxt)
+            self.terminal_stack.set_visible_child(nxt.terminal)
 
     def _show_group_empty(self, group: Group) -> None:
         if isinstance(group, Project):

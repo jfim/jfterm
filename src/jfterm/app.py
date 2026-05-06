@@ -3,6 +3,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Vte", "3.91")
+gi.require_version("Graphene", "1.0")
 
 from gi.repository import Adw, Gio  # noqa: E402
 
