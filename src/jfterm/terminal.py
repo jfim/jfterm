@@ -20,12 +20,20 @@ class JFTermTerminal(Vte.Terminal):
         "title-changed": (GObject.SignalFlags.RUN_FIRST, None, (str,)),
     }
 
-    def __init__(self, cwd: str | None = None) -> None:
+    def __init__(
+        self,
+        cwd: str | None = None,
+        send_after_spawn: str | None = None,
+    ) -> None:
         super().__init__()
         self.shell_pid: int | None = None
         self.pty_fd: int | None = None
         self._initial_cwd = cwd or str(Path.home())
         self._osc133_seen = False
+        # Feed this string (with a trailing newline) into the pty as soon as
+        # the shell has spawned. The shell will buffer it until ready and
+        # execute as if the user typed it.
+        self._send_after_spawn = send_after_spawn
 
         self.connect("current-directory-uri-changed", self._on_cwd_uri_changed)
         self.connect("window-title-changed", self._on_title_changed)
@@ -68,6 +76,9 @@ class JFTermTerminal(Vte.Terminal):
         pty = self.get_pty()
         if pty is not None:
             self.pty_fd = pty.get_fd()
+        if self._send_after_spawn is not None:
+            self.feed_child((self._send_after_spawn + "\n").encode())
+            self._send_after_spawn = None
 
     def _on_cwd_uri_changed(self, _t) -> None:
         uri = self.get_current_directory_uri()

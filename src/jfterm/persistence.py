@@ -5,7 +5,7 @@ from pathlib import Path
 from jfterm.models import Project, Workspace
 
 
-_KNOWN_FIELDS = {"id", "name", "directory", "expanded"}
+_KNOWN_FIELDS = {"id", "name", "directory", "expanded", "startup_commands"}
 
 
 def load_projects(ws: Workspace, path: Path) -> None:
@@ -18,6 +18,7 @@ def load_projects(ws: Workspace, path: Path) -> None:
             name=entry["name"],
             directory=entry["directory"],
             expanded=entry.get("expanded", True),
+            startup_commands=entry.get("startup_commands", []),
         )
         # Stash unknown fields for forward compatibility.
         p._extra = {k: v for k, v in entry.items() if k not in _KNOWN_FIELDS}
@@ -36,6 +37,7 @@ def save_projects(ws: Workspace, path: Path) -> None:
                 "name": p.name,
                 "directory": p.directory,
                 "expanded": p.expanded,
+                "startup_commands": list(p.startup_commands),
                 **getattr(p, "_extra", {}),
             }
             for p in ws.projects

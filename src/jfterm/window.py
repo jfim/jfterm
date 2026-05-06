@@ -63,6 +63,9 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.sidebar.connect(
             "configure-project-requested", self._on_configure_project
         )
+        self.sidebar.connect(
+            "launch-project-requested", self._on_launch_project
+        )
         self.sidebar.connect("toggle-expanded-requested", self._on_toggle_expanded)
         self.sidebar.connect("dot-clicked", self._on_dot_clicked)
         self.sidebar.connect("tab-dropped", self._on_tab_dropped)
@@ -92,11 +95,20 @@ class JFTermWindow(Adw.ApplicationWindow):
             tab.terminal.grab_focus()
 
     def _on_new_tab(self, _sb, group: Group) -> None:
+        self._spawn_tab(group)
+
+    def _spawn_tab(
+        self,
+        group: Group,
+        *,
+        command: str | None = None,
+        focus: bool = True,
+    ) -> Tab:
         cwd = group.directory if isinstance(group, Project) else None
-        terminal = JFTermTerminal(cwd=cwd)
+        terminal = JFTermTerminal(cwd=cwd, send_after_spawn=command)
         terminal.set_vexpand(True)
         terminal.set_hexpand(True)
-        tab = Tab(title="(starting…)", terminal=terminal)
+        tab = Tab(title=command or "(starting…)", terminal=terminal)
         terminal.connect(
             "cwd-changed",
             lambda _t, path, t=tab: self._on_tab_cwd_changed(t, path),
@@ -117,8 +129,10 @@ class JFTermWindow(Adw.ApplicationWindow):
         group.add_tab(tab)
         self._current_group = group
         self.sidebar.refresh()
-        self.terminal_stack.set_visible_child(terminal)
-        terminal.grab_focus()
+        if focus:
+            self.terminal_stack.set_visible_child(terminal)
+            terminal.grab_focus()
+        return tab
 
     def _on_close_tab(self, _sb, tab: Tab) -> None:
         group = self.ws._find_group(tab)
@@ -153,8 +167,9 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _on_new_project(self, _sb) -> None:
         from jfterm.dialogs import show_project_dialog
 
-        def _save(name: str, directory: str) -> None:
-            self.ws.add_project(name=name, directory=directory)
+        def _save(name: str, directory: str, commands: list[str]) -> None:
+            p = self.ws.add_project(name=name, directory=directory)
+            p.startup_commands = commands
             save_projects(self.ws, default_path())
             self.sidebar.refresh()
 
@@ -163,9 +178,10 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _on_configure_project(self, _sb, project: Project) -> None:
         from jfterm.dialogs import show_project_dialog
 
-        def _save(name: str, directory: str) -> None:
+        def _save(name: str, directory: str, commands: list[str]) -> None:
             project.name = name
             project.directory = directory
+            project.startup_commands = commands
             save_projects(self.ws, default_path())
             self.sidebar.refresh()
 
@@ -181,9 +197,22 @@ class JFTermWindow(Adw.ApplicationWindow):
             title=f"Configure {project.name}",
             initial_name=project.name,
             initial_directory=project.directory,
+            initial_commands=project.startup_commands,
             on_save=_save,
             on_disband=_disband,
         )
+
+    def _on_launch_project(self, _sb, project: Project) -> None:
+        if not project.startup_commands:
+            return
+        first: Tab | None = None
+        for cmd in project.startup_commands:
+            tab = self._spawn_tab(project, command=cmd, focus=False)
+            if first is None:
+                first = tab
+        if first is not None and first.terminal is not None:
+            self.terminal_stack.set_visible_child(first.terminal)
+            first.terminal.grab_focus()
 
     def _on_toggle_expanded(self, _sb, group: Group) -> None:
         group.expanded = not group.expanded

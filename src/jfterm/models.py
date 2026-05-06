@@ -51,12 +51,14 @@ class Project(Group):
         directory: str,
         expanded: bool = True,
         id: str | None = None,
+        startup_commands: list[str] | None = None,
     ) -> None:
         super().__init__()
         self.name = name
         self.directory = directory
         self.expanded = expanded
         self.id = id if id is not None else uuid.uuid4().hex
+        self.startup_commands: list[str] = list(startup_commands or [])
 
 
 class Workspace:

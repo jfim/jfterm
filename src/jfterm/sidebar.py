@@ -32,6 +32,7 @@ class Sidebar(Gtk.ScrolledWindow):
         "new-tab-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "close-tab-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "configure-project-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
+        "launch-project-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "new-project-requested": (GObject.SignalFlags.RUN_FIRST, None, ()),
         "toggle-expanded-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "dot-clicked": (GObject.SignalFlags.RUN_FIRST, None, (object, object, object)),
@@ -138,6 +139,15 @@ class Sidebar(Gtk.ScrolledWindow):
             lambda _b, p=project: self.emit("toggle-expanded-requested", p),
         )
 
+        play = Gtk.Button.new_from_icon_name("media-playback-start-symbolic")
+        play.add_css_class("flat")
+        play.set_tooltip_text("Launch project")
+        play.set_sensitive(bool(project.startup_commands))
+        play.connect(
+            "clicked",
+            lambda _b, p=project: self.emit("launch-project-requested", p),
+        )
+
         cog = Gtk.Button.new_from_icon_name("emblem-system-symbolic")
         cog.add_css_class("flat")
         cog.set_tooltip_text("Settings")
@@ -153,7 +163,7 @@ class Sidebar(Gtk.ScrolledWindow):
             "clicked", lambda _b, p=project: self.emit("new-tab-requested", p)
         )
 
-        for w in (chevron, label_btn, cog, plus):
+        for w in (chevron, label_btn, play, cog, plus):
             row.append(w)
         self._box.append(row)
 
