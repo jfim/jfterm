@@ -105,6 +105,10 @@ class JFTermWindow(Adw.ApplicationWindow):
             "title-changed",
             lambda _t, title, t=tab: self._on_tab_title_changed(t, title),
         )
+        terminal.connect(
+            "child-exited",
+            lambda _t, _status, t=tab: self._on_close_tab(self.sidebar, t),
+        )
         self.terminal_stack.add_child(terminal)
         group.add_tab(tab)
         self._current_group = group
