@@ -85,6 +85,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         if tab.terminal is not None:
             self._current_group = self.ws._find_group(tab)
             self.terminal_stack.set_visible_child(tab.terminal)
+            tab.terminal.grab_focus()
 
     def _on_new_tab(self, _sb, group: Group) -> None:
         cwd = group.directory if isinstance(group, Project) else None
@@ -109,6 +110,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         self._current_group = group
         self.sidebar.refresh()
         self.terminal_stack.set_visible_child(terminal)
+        terminal.grab_focus()
 
     def _on_close_tab(self, _sb, tab: Tab) -> None:
         group = self.ws._find_group(tab)
@@ -133,7 +135,10 @@ class JFTermWindow(Adw.ApplicationWindow):
         if group.tabs:
             new_idx = min(idx, len(group.tabs) - 1)
             self._current_group = group
-            self.terminal_stack.set_visible_child(group.tabs[new_idx].terminal)
+            promoted = group.tabs[new_idx]
+            self.terminal_stack.set_visible_child(promoted.terminal)
+            if promoted.terminal is not None:
+                promoted.terminal.grab_focus()
         else:
             self._show_group_empty(group)
 
@@ -279,6 +284,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         if nxt.terminal is not None:
             self._current_group = self.ws._find_group(nxt)
             self.terminal_stack.set_visible_child(nxt.terminal)
+            nxt.terminal.grab_focus()
 
     def _show_group_empty(self, group: Group) -> None:
         if isinstance(group, Project):
