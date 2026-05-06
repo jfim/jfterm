@@ -127,6 +127,7 @@ class Sidebar(Gtk.ScrolledWindow):
 
         cog = Gtk.Button.new_from_icon_name("emblem-system-symbolic")
         cog.add_css_class("flat")
+        cog.set_tooltip_text("Settings")
         cog.connect(
             "clicked",
             lambda _b, p=project: self.emit("configure-project-requested", p),
@@ -134,6 +135,7 @@ class Sidebar(Gtk.ScrolledWindow):
 
         plus = Gtk.Button.new_from_icon_name("list-add-symbolic")
         plus.add_css_class("flat")
+        plus.set_tooltip_text("New tab")
         plus.connect(
             "clicked", lambda _b, p=project: self.emit("new-tab-requested", p)
         )
@@ -167,6 +169,7 @@ class Sidebar(Gtk.ScrolledWindow):
 
         plus = Gtk.Button.new_from_icon_name("list-add-symbolic")
         plus.add_css_class("flat")
+        plus.set_tooltip_text("New tab")
         plus.connect(
             "clicked", lambda _b, g=group: self.emit("new-tab-requested", g)
         )
