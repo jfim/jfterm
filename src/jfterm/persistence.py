@@ -2,10 +2,26 @@ import json
 import os
 from pathlib import Path
 
-from jfterm.models import Project, Workspace
+from jfterm.models import Project, StartupCommand, Workspace
 
 
 _KNOWN_FIELDS = {"id", "name", "directory", "expanded", "startup_commands"}
+
+
+def _load_commands(raw: list) -> list[StartupCommand]:
+    """Accept both legacy list[str] and new list[{command, delay}]."""
+    out: list[StartupCommand] = []
+    for item in raw:
+        if isinstance(item, str):
+            out.append(StartupCommand(command=item, delay=0))
+        elif isinstance(item, dict):
+            out.append(
+                StartupCommand(
+                    command=str(item.get("command", "")),
+                    delay=int(item.get("delay", 0)),
+                )
+            )
+    return out
 
 
 def load_projects(ws: Workspace, path: Path) -> None:
@@ -18,7 +34,7 @@ def load_projects(ws: Workspace, path: Path) -> None:
             name=entry["name"],
             directory=entry["directory"],
             expanded=entry.get("expanded", True),
-            startup_commands=entry.get("startup_commands", []),
+            startup_commands=_load_commands(entry.get("startup_commands", [])),
         )
         # Stash unknown fields for forward compatibility.
         p._extra = {k: v for k, v in entry.items() if k not in _KNOWN_FIELDS}
@@ -37,7 +53,10 @@ def save_projects(ws: Workspace, path: Path) -> None:
                 "name": p.name,
                 "directory": p.directory,
                 "expanded": p.expanded,
-                "startup_commands": list(p.startup_commands),
+                "startup_commands": [
+                    {"command": c.command, "delay": c.delay}
+                    for c in p.startup_commands
+                ],
                 **getattr(p, "_extra", {}),
             }
             for p in ws.projects

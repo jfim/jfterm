@@ -5,6 +5,8 @@ from typing import Callable
 
 from gi.repository import Adw, Gtk
 
+from jfterm.models import StartupCommand
+
 
 def show_project_dialog(
     parent: Gtk.Window,
@@ -12,8 +14,8 @@ def show_project_dialog(
     title: str,
     initial_name: str = "",
     initial_directory: str = "",
-    initial_commands: list[str] | None = None,
-    on_save: Callable[[str, str, list[str]], None],
+    initial_commands: list[StartupCommand] | None = None,
+    on_save: Callable[[str, str, list[StartupCommand]], None],
     on_disband: Callable[[], None] | None = None,
 ) -> None:
     dlg = Adw.Window(
@@ -61,31 +63,41 @@ def show_project_dialog(
     # --- startup commands editor ---
 
     commands_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-    command_entries: list[Gtk.Entry] = []
+    # Each entry is (Gtk.Entry for command, Gtk.SpinButton for delay).
+    command_rows: list[tuple[Gtk.Entry, Gtk.SpinButton]] = []
 
-    def _add_command_row(initial_text: str = "") -> None:
+    def _add_command_row(initial_text: str = "", initial_delay: int = 0) -> None:
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         entry = Gtk.Entry(
             placeholder_text="e.g. docker compose up postgres"
         )
         entry.set_text(initial_text)
         entry.set_hexpand(True)
+
+        delay = Gtk.SpinButton.new_with_range(0, 600, 1)
+        delay.set_value(initial_delay)
+        delay.set_tooltip_text(
+            "Seconds to wait after starting this command before the next "
+            "(0 = launch the next one immediately)."
+        )
+
         delete = Gtk.Button.new_from_icon_name("user-trash-symbolic")
         delete.add_css_class("flat")
         delete.set_tooltip_text("Remove command")
 
-        def _on_delete(_b, r=row, e=entry):
+        def _on_delete(_b, r=row, pair=(entry, delay)):
             commands_box.remove(r)
-            command_entries.remove(e)
+            command_rows.remove(pair)
 
         delete.connect("clicked", _on_delete)
         row.append(entry)
+        row.append(delay)
         row.append(delete)
         commands_box.append(row)
-        command_entries.append(entry)
+        command_rows.append((entry, delay))
 
-    for cmd in initial_commands or []:
-        _add_command_row(cmd)
+    for sc in initial_commands or []:
+        _add_command_row(sc.command, sc.delay)
 
     add_cmd_btn = Gtk.Button(label="Add command")
     add_cmd_btn.add_css_class("flat")
@@ -105,9 +117,9 @@ def show_project_dialog(
         if not name or not directory:
             return
         commands = [
-            e.get_text().strip()
-            for e in command_entries
-            if e.get_text().strip()
+            StartupCommand(command=text, delay=int(delay_w.get_value()))
+            for entry, delay_w in command_rows
+            if (text := entry.get_text().strip())
         ]
         on_save(name, directory, commands)
         dlg.close()

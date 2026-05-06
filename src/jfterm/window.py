@@ -205,14 +205,23 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _on_launch_project(self, _sb, project: Project) -> None:
         if not project.startup_commands:
             return
-        first: Tab | None = None
-        for cmd in project.startup_commands:
-            tab = self._spawn_tab(project, command=cmd, focus=False)
-            if first is None:
-                first = tab
-        if first is not None and first.terminal is not None:
-            self.terminal_stack.set_visible_child(first.terminal)
-            first.terminal.grab_focus()
+        from gi.repository import GLib
+
+        cmds = list(project.startup_commands)
+
+        def _step(idx: int) -> bool:
+            if idx >= len(cmds):
+                return False  # remove timeout
+            sc = cmds[idx]
+            tab = self._spawn_tab(project, command=sc.command, focus=(idx == 0))
+            if idx + 1 < len(cmds):
+                if sc.delay > 0:
+                    GLib.timeout_add_seconds(sc.delay, _step, idx + 1)
+                else:
+                    GLib.idle_add(_step, idx + 1)
+            return False
+
+        _step(0)
 
     def _on_toggle_expanded(self, _sb, group: Group) -> None:
         group.expanded = not group.expanded

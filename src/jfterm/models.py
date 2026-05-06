@@ -6,6 +6,14 @@ from typing import Any
 
 
 @dataclass
+class StartupCommand:
+    """A command to run when launching a project, with a post-spawn delay
+    (in seconds) before the next command is spawned."""
+    command: str
+    delay: int = 0
+
+
+@dataclass
 class Tab:
     title: str = ""
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
@@ -51,14 +59,14 @@ class Project(Group):
         directory: str,
         expanded: bool = True,
         id: str | None = None,
-        startup_commands: list[str] | None = None,
+        startup_commands: list[StartupCommand] | None = None,
     ) -> None:
         super().__init__()
         self.name = name
         self.directory = directory
         self.expanded = expanded
         self.id = id if id is not None else uuid.uuid4().hex
-        self.startup_commands: list[str] = list(startup_commands or [])
+        self.startup_commands: list[StartupCommand] = list(startup_commands or [])
 
 
 class Workspace:
