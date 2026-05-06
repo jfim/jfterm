@@ -1,9 +1,18 @@
 # JFTerm
 
+A terminal for people juggling multiple projects — per-project tab groups and
+one-click access to each project's setup.
+
 ![JFTerm screenshot](images/screenshot.png)
 
-A terminal for GNOME that uses tabs and per-project groupings. Uses VTE for the
-actual terminal.
+## Features
+
+- Per-project tab groups in a sidebar, plus an Unsorted bucket for ad-hoc tabs.
+- One-click launch of a project's configured startup commands.
+- Status dot per tab showing whether the shell is busy and whether the cwd
+  matches the tab's project.
+- Drag-and-drop to move tabs between projects.
+- Built on GTK 4 / libadwaita with VTE 3.91 for the terminal itself.
 
 ## Running
 
