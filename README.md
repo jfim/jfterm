@@ -17,9 +17,12 @@ libraries. On Ubuntu 24.04:
         libvte-2.91-gtk4-0 \
         python3-gi python3-cairo
 
-The project's venv is configured to inherit system site packages so the
-apt-installed PyGObject + VTE bindings are picked up directly. Recreate the
-venv with:
+The project relies on the apt-installed PyGObject + VTE bindings (building
+`pygobject` from source needs `libgirepository-2.0-dev` and is slow). The
+venv must be created with `--system-site-packages` so it can import the
+system `gi`. **Run this once before the first `uv run`** — a plain `uv sync`
+auto-creates a venv *without* that flag, which then fails with
+`ModuleNotFoundError: No module named 'gi'`:
 
     uv venv --system-site-packages --python /usr/bin/python3
     uv sync
@@ -27,6 +30,8 @@ venv with:
 Then:
 
     uv run python -m jfterm
+
+If you delete `.venv`, repeat the `uv venv …` step before `uv sync`.
 
 For the prompt-running indicator (blue dot) to be most accurate, configure your
 shell to emit OSC 7 (cwd) and OSC 133 (prompt/command markers). The design doc
