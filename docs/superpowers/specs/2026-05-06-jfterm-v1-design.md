@@ -56,7 +56,11 @@ In-memory:
 
 **New tab in Unsorted:** same shell, cwd = `$HOME`.
 
-**Close tab:** terminates the VTE child process, destroys the widget, removes the tab from its group's list. If the closed tab was selected, selection moves to the next tab in the same group, falling back to the previous tab, falling back across groups in sidebar order. If no tabs remain anywhere, the right pane shows the empty state.
+**Close tab:** terminates the VTE child process, destroys the widget, removes the tab from its group's list. If the closed tab was selected, selection follows this priority within the same group only (it does not jump to other groups):
+
+1. The next tab in the same group (the tab that took the closed tab's slot).
+2. If the closed tab was last, the new last tab.
+3. If the group is now empty, the right pane shows the per-group empty panel for that group.
 
 **Tab labels:** the VTE widget's window-title property (`Vte.Terminal.get_window_title()`, set by the shell via `OSC 0`/`OSC 2`). The user's existing prompt already emits this. Labels are truncated with ellipsis to fit the sidebar row width.
 
@@ -156,11 +160,14 @@ OK creates the project and appends it to the project list (above Unsorted).
 
 **Rename / change directory** — done via Configure. Changing a project's directory immediately re-evaluates all of its tabs' status-dot fill states (and the dot-click menu offerings on tabs in other projects).
 
-## Empty State
+## Empty States
 
-When no tabs exist anywhere (initial launch, or after closing the last tab), the right pane shows a centered placeholder label: "No tabs — click + to create one". The window stays open.
+The right pane has two empty-state variants, both centered placeholder labels with the window staying open:
 
-The startup state is **always** the empty state — no tabs are auto-created on launch, regardless of whether saved projects exist.
+- **Global empty state** ("No tabs — click + to create one"): shown at startup before the user has interacted with any group, when no current-group context exists. The startup state is **always** this — no tabs are auto-created on launch, regardless of whether saved projects exist.
+- **Per-group empty state**: shown when the currently-focused group has no tabs (e.g., the user closed the last tab in Project A). Label is **"Project {name} has no tabs."** for projects and **"Unsorted has no tabs."** for the Unsorted group.
+
+Selecting any tab (clicking it in the sidebar, or creating one via `+`) replaces the empty state with that tab's terminal. Closing the last tab in the current group transitions to that group's per-group empty state — the view does **not** jump to another group's tabs automatically.
 
 ## Keyboard Shortcuts (v1)
 
