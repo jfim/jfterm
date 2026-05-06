@@ -9,6 +9,18 @@ from jfterm.models import Group, Project, Tab, Workspace
 from jfterm.status_dot import StatusDot
 
 
+class _TabRef(GObject.Object):
+    """GObject wrapper around a Tab so it can travel through GValue/Gdk DnD.
+
+    GValue's TYPE_PYOBJECT path doesn't accept Python objects via set_object;
+    a real GObject does. This carrier holds the actual Tab as a Python attr.
+    """
+
+    def __init__(self, tab: Tab) -> None:
+        super().__init__()
+        self.tab = tab
+
+
 class Sidebar(Gtk.ScrolledWindow):
     """Sidebar listing projects and their tabs, plus Unsorted.
 
@@ -72,8 +84,8 @@ class Sidebar(Gtk.ScrolledWindow):
 
         def _prepare(_s, _x, _y):
             v = GObject.Value()
-            v.init(GObject.TYPE_PYOBJECT)
-            v.set_object(tab)
+            v.init(_TabRef.__gtype__)
+            v.set_object(_TabRef(tab))
             return Gdk.ContentProvider.new_for_value(v)
 
         src.connect("prepare", _prepare)
@@ -85,10 +97,11 @@ class Sidebar(Gtk.ScrolledWindow):
         target_group: Group,
         target_position_callable: Callable[[], int],
     ) -> None:
-        target = Gtk.DropTarget.new(GObject.TYPE_PYOBJECT, Gdk.DragAction.MOVE)
+        target = Gtk.DropTarget.new(_TabRef.__gtype__, Gdk.DragAction.MOVE)
 
         def _on_drop(_t, value, _x, _y):
-            self.emit("tab-dropped", value, target_group, target_position_callable())
+            tab = value.tab if isinstance(value, _TabRef) else value
+            self.emit("tab-dropped", tab, target_group, target_position_callable())
             return True
 
         target.connect("drop", _on_drop)
