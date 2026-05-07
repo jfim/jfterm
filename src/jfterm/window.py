@@ -843,11 +843,11 @@ class JFTermWindow(Adw.ApplicationWindow):
         save_projects(self.ws, default_path())
         self.sidebar.refresh()
 
-    def _on_tab_cwd_changed(self, tab: TerminalTab, path: str) -> None:
+    def _on_tab_cwd_changed(self, tab: TerminalTab | LinkedTab, path: str) -> None:
         tab.current_cwd = path
         self._refresh_tab_dot(tab)
 
-    def _on_tab_running_changed(self, tab: TerminalTab, running: bool) -> None:
+    def _on_tab_running_changed(self, tab: TerminalTab | LinkedTab, running: bool) -> None:
         if tab.is_running == running:
             return
         tab.is_running = running
@@ -865,10 +865,10 @@ class JFTermWindow(Adw.ApplicationWindow):
         if bar is not None:
             bar.set_progress(0, 0)
 
-    def _on_tab_title_changed(self, tab: TerminalTab, title: str) -> None:
+    def _on_tab_title_changed(self, tab: TerminalTab | LinkedTab, title: str) -> None:
         if tab.flash_name is not None:
             tab.title = f"⚡ {tab.flash_name}: {title}" if title else f"⚡ {tab.flash_name}"
-        elif tab.from_startup:
+        elif getattr(tab, "from_startup", False):
             base = title or tab.launched_command or "tab"
             tab.title = f"▶ {base}"
         else:
@@ -877,7 +877,7 @@ class JFTermWindow(Adw.ApplicationWindow):
 
     # --- helpers ---
 
-    def _refresh_tab_dot(self, tab: TerminalTab) -> None:
+    def _refresh_tab_dot(self, tab: TerminalTab | LinkedTab) -> None:
         from jfterm.matching import is_inside, matching_projects
 
         try:
