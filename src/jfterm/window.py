@@ -490,12 +490,19 @@ class JFTermWindow(Adw.ApplicationWindow):
             self.sidebar.refresh()
         from gi.repository import GLib
 
-        running = {
+        from jfterm.url_routing import is_web_url
+
+        running_terminal = {
             t.launched_command
             for t in project.tabs
             if isinstance(t, TerminalTab) and t.launched_command
         }
-        cmds = [sc for sc in project.startup_commands if sc.command not in running]
+        running_web = {t.url for t in project.tabs if isinstance(t, WebTab)}
+        cmds = [
+            sc
+            for sc in project.startup_commands
+            if sc.command not in running_terminal and sc.command.strip() not in running_web
+        ]
         spawn_blank = project.spawn_blank_after_startup
 
         def _step(idx: int) -> bool:
@@ -506,9 +513,26 @@ class JFTermWindow(Adw.ApplicationWindow):
             sc = cmds[idx]
             is_last = idx == len(cmds) - 1
             focus = sc.delay > 0 or (is_last and not spawn_blank)
-            tab = self._spawn_tab(project, command=sc.command, focus=focus)
-            tab.from_startup = True
-            tab.title = f"▶ {sc.command}"
+            if is_web_url(sc.command):
+                try:
+                    self._spawn_web_tab(
+                        project,
+                        url=sc.command.strip(),
+                        focus=focus,
+                        from_startup=True,
+                    )
+                except RuntimeError as e:
+                    fb = self._spawn_tab(
+                        project,
+                        command=f'echo "JFTerm: {e}"',
+                        focus=focus,
+                    )
+                    fb.from_startup = True
+                    fb.title = f"▶ {sc.command}"
+            else:
+                tab = self._spawn_tab(project, command=sc.command, focus=focus)
+                tab.from_startup = True
+                tab.title = f"▶ {sc.command}"
             if idx + 1 < len(cmds) or spawn_blank:
                 if sc.delay > 0:
                     GLib.timeout_add_seconds(sc.delay, _step, idx + 1)
@@ -523,6 +547,28 @@ class JFTermWindow(Adw.ApplicationWindow):
             project.expanded = True
             save_projects(self.ws, default_path())
             self.sidebar.refresh()
+
+        from jfterm.url_routing import is_web_url
+
+        if is_web_url(fc.command):
+            try:
+                self._spawn_web_tab(
+                    project,
+                    url=fc.command.strip(),
+                    focus=fc.focus_on_launch,
+                    flash_name=fc.name,
+                )
+            except RuntimeError as e:
+                fb = self._spawn_tab(
+                    project,
+                    command=f'echo "JFTerm: {e}"',
+                    focus=fc.focus_on_launch,
+                )
+                fb.flash_name = fc.name
+                fb.title = f"⚡ {fc.name}"
+            self.sidebar.refresh()
+            return
+
         wrapped = wrap_flash_command(fc)
         tab = self._spawn_tab(project, command=wrapped, focus=fc.focus_on_launch)
         tab.flash_name = fc.name
