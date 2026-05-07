@@ -77,6 +77,8 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.sidebar.connect("restart-tab-requested", self._on_restart_tab)
         self.sidebar.connect("new-project-requested", self._on_new_project)
         self.sidebar.connect("configure-project-requested", self._on_configure_project)
+        self.sidebar.connect("archive-project-requested", self._on_archive_project)
+        self.sidebar.connect("delete-project-requested", self._on_delete_project)
         self.sidebar.connect("launch-project-requested", self._on_launch_project)
         self.sidebar.connect("flash-command-launched", self._on_flash_command_launched)
         self.sidebar.connect("toggle-expanded-requested", self._on_toggle_expanded)
@@ -302,11 +304,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             self.sidebar.refresh()
 
         def _disband() -> None:
-            self.ws.disband(project)
-            if self._current_group is project:
-                self._current_group = self.ws.unsorted
-            save_projects(self.ws, default_path())
-            self.sidebar.refresh()
+            self._delete_project(project)
 
         show_project_dialog(
             self,
@@ -319,6 +317,20 @@ class JFTermWindow(Adw.ApplicationWindow):
             on_save=_save,
             on_disband=_disband,
         )
+
+    def _on_archive_project(self, _sb, project: Project) -> None:
+        # TODO: archive support is being implemented separately.
+        pass
+
+    def _on_delete_project(self, _sb, project: Project) -> None:
+        self._delete_project(project)
+
+    def _delete_project(self, project: Project) -> None:
+        self.ws.disband(project)
+        if self._current_group is project:
+            self._current_group = self.ws.unsorted
+        save_projects(self.ws, default_path())
+        self.sidebar.refresh()
 
     def _on_launch_project(self, _sb, project: Project) -> None:
         if not project.startup_commands:
