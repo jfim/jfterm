@@ -23,10 +23,7 @@ class DoubleTapDetector:
         if keyval != self._target:
             self._pending_time = None
             return
-        if (
-            self._pending_time is not None
-            and time_ms - self._pending_time <= self._interval
-        ):
+        if self._pending_time is not None and time_ms - self._pending_time <= self._interval:
             self._pending_time = None
             self._callback()
             return
