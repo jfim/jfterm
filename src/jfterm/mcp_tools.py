@@ -22,3 +22,13 @@ async def list_projects(
     controller: MCPController, _params: ListProjectsInput
 ) -> dict:
     return {"projects": [asdict(p) for p in controller.list_projects()]}
+
+
+class ListTabsInput(BaseModel):
+    project_name: str | None = None
+
+
+async def list_tabs(controller: MCPController, params: ListTabsInput) -> dict:
+    return {
+        "tabs": [asdict(t) for t in controller.list_tabs(params.project_name)],
+    }
