@@ -22,6 +22,18 @@ class _TabRef(GObject.Object):
         self.tab = tab
 
 
+class _ProjectRef(GObject.Object):
+    """GObject wrapper around a Project for project DnD.
+
+    Distinct GType from `_TabRef` so project drop targets only accept
+    project drags and tab drop targets only accept tab drags.
+    """
+
+    def __init__(self, project: Project) -> None:
+        super().__init__()
+        self.project = project
+
+
 class Sidebar(Gtk.ScrolledWindow):
     """Sidebar listing projects and their tabs, plus Unsorted.
 
@@ -46,6 +58,7 @@ class Sidebar(Gtk.ScrolledWindow):
         "toggle-expanded-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "dot-clicked": (GObject.SignalFlags.RUN_FIRST, None, (object, object, object)),
         "tab-dropped": (GObject.SignalFlags.RUN_FIRST, None, (object, object, int)),
+        "project-dropped": (GObject.SignalFlags.RUN_FIRST, None, (object, int)),
         "unarchive-project-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "toggle-archived-expanded-requested": (GObject.SignalFlags.RUN_FIRST, None, ()),
     }
@@ -113,11 +126,13 @@ class Sidebar(Gtk.ScrolledWindow):
         for idx, project in enumerate(active):
             if idx > 0:
                 self._add_separator()
-            self._add_project_row(project)
+            self._add_project_row(project, idx)
             if project.expanded:
                 for tab in project.tabs:
                     self._add_tab_row(project, tab)
                 self._add_drop_sentinel(project)
+        if active:
+            self._add_project_end_sentinel()
 
         if active:
             self._add_separator()
@@ -164,6 +179,34 @@ class Sidebar(Gtk.ScrolledWindow):
         def _on_drop(_t, value, _x, _y):
             tab = value.tab if isinstance(value, _TabRef) else value
             self.emit("tab-dropped", tab, target_group, target_position_callable())
+            return True
+
+        target.connect("drop", _on_drop)
+        row.add_controller(target)
+
+    def _attach_project_drag(self, row: Gtk.Widget, project: Project) -> None:
+        src = Gtk.DragSource()
+        src.set_actions(Gdk.DragAction.MOVE)
+
+        def _prepare(_s, _x, _y):
+            v = GObject.Value()
+            v.init(_ProjectRef.__gtype__)
+            v.set_object(_ProjectRef(project))
+            return Gdk.ContentProvider.new_for_value(v)
+
+        src.connect("prepare", _prepare)
+        row.add_controller(src)
+
+    def _attach_project_drop(
+        self,
+        row: Gtk.Widget,
+        target_position_callable: Callable[[], int],
+    ) -> None:
+        target = Gtk.DropTarget.new(_ProjectRef.__gtype__, Gdk.DragAction.MOVE)
+
+        def _on_drop(_t, value, _x, _y):
+            project = value.project if isinstance(value, _ProjectRef) else value
+            self.emit("project-dropped", project, target_position_callable())
             return True
 
         target.connect("drop", _on_drop)
@@ -234,9 +277,15 @@ class Sidebar(Gtk.ScrolledWindow):
         self._attach_drop(sentinel, group, lambda g=group: len(g.tabs))
         self._box.append(sentinel)
 
+    def _add_project_end_sentinel(self) -> None:
+        sentinel = Gtk.Box()
+        sentinel.set_size_request(-1, 6)
+        self._attach_project_drop(sentinel, lambda: len(self._ws.active_projects))
+        self._box.append(sentinel)
+
     # --- row builders ---
 
-    def _add_project_row(self, project: Project) -> None:
+    def _add_project_row(self, project: Project, active_index: int) -> None:
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         row.set_margin_start(4)
         row.set_margin_end(4)
@@ -299,6 +348,9 @@ class Sidebar(Gtk.ScrolledWindow):
             lambda g, _n, x, y, p=project, r=row: self._show_project_context_menu(r, p, x, y),
         )
         row.add_controller(gesture)
+
+        self._attach_project_drag(row, project)
+        self._attach_project_drop(row, lambda i=active_index: i)
 
         self._box.append(row)
 
