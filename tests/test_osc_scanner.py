@@ -118,5 +118,6 @@ def test_runaway_sequence_flushes_introducer_and_recovers():
     assert b"\x1b]" in out1
     assert ev1 == []
     # Now feed a proper sequence; carry must be empty so it parses cleanly.
-    _out2, ev2 = scanner.feed(b"\x1b]9;4;1;5\x1b\\")
+    out2, ev2 = scanner.feed(b"\x1b]9;4;1;5\x1b\\")
+    assert out2 == b""
     assert ev2 == [ProgressEvent(state=1, value=5)]
