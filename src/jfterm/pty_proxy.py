@@ -56,6 +56,11 @@ class PtyProxy(GObject.Object):
             # run any parent-side teardown.
             with contextlib.suppress(OSError):
                 os.chdir(cwd)
+            # VTE emulates xterm-256color; without this the child inherits
+            # whatever TERM jfterm was launched with (often "dumb"), and
+            # color-aware CLIs disable ANSI output.
+            os.environ["TERM"] = "xterm-256color"
+            os.environ["COLORTERM"] = "truecolor"
             try:
                 os.execvp(argv[0], argv)
             except OSError:
