@@ -42,6 +42,24 @@ def test_launcher_recents_dedupe_and_cap():
     assert recents[0] == NewTabAction(p4)
 
 
+def test_launcher_recents_helpers_handle_unhashable_actions():
+    # FlashCommand is a non-frozen dataclass -> unhashable. The wrapping
+    # FlashAction is therefore also unhashable. Recents/items helpers must
+    # rely on equality, not hashing.
+    ws = Workspace()
+    p = ws.add_project(name="Alpha", directory="/tmp/a")
+    fc = FlashCommand(name="Push", command="git push")
+    p.flash_commands.append(fc)
+    items = build_items(ws)
+    flash_action = next(i.action for i in items if isinstance(i.action, FlashAction))
+
+    recents: list = []
+    Launcher.push_recent(recents, flash_action, max_recents=3)
+    Launcher.push_recent(recents, flash_action, max_recents=3)  # dedup
+    assert recents == [flash_action]
+    assert Launcher.recents_in_items(recents, items) == [flash_action]
+
+
 def test_launcher_recents_filter_drops_stale_actions():
     ws = Workspace()
     p = ws.add_project(name="Alpha", directory="/tmp/a")
