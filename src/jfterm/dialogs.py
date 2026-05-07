@@ -449,3 +449,45 @@ def show_project_dialog(
 
     dlg.set_content(box)
     dlg.present()
+
+
+def show_new_web_tab_dialog(
+    parent: Gtk.Window,
+    on_confirm: Callable[[str], None],
+) -> None:
+    """Prompt for a URL. Calls `on_confirm(trimmed_url)` if the user submits
+    a value matching ^https?:// (case-insensitive)."""
+    from jfterm.url_routing import is_web_url
+
+    dialog = Adw.AlertDialog(heading="New web tab")
+    dialog.add_response("cancel", "Cancel")
+    dialog.add_response("ok", "Open")
+    dialog.set_response_appearance("ok", Adw.ResponseAppearance.SUGGESTED)
+    dialog.set_default_response("ok")
+    dialog.set_close_response("cancel")
+
+    body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+    entry = Gtk.Entry()
+    entry.set_text("https://")
+    entry.set_hexpand(True)
+    error_label = Gtk.Label()
+    error_label.add_css_class("error")
+    error_label.set_xalign(0)
+    error_label.set_visible(False)
+    body.append(entry)
+    body.append(error_label)
+    dialog.set_extra_child(body)
+
+    def _on_response(_d: Adw.AlertDialog, response: str) -> None:
+        if response != "ok":
+            return
+        url = entry.get_text().strip()
+        if not is_web_url(url):
+            error_label.set_text("URL must start with http:// or https://")
+            error_label.set_visible(True)
+            dialog.present(parent)
+            return
+        on_confirm(url)
+
+    dialog.connect("response", _on_response)
+    dialog.present(parent)
