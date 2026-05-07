@@ -19,7 +19,16 @@ build-backend = "hatchling.build"
 dev = [
     "pytest>=9.0.3",
     "ruff>=0.8",
+    "pyright>=1.1",
 ]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+# gi.repository ships no type stubs; suppress import noise.
+reportMissingImports = false
+reportMissingModuleSource = false
 
 [tool.ruff]
 line-length = 100

@@ -31,6 +31,9 @@ class Tab:
     # True while a restart is in flight, so the old terminal's child-exited
     # signal does not remove the tab from its group.
     is_restarting: bool = False
+    # Sidebar attaches the row's StatusDot here so the runtime layer can
+    # update its visual state without a full sidebar refresh.
+    _dot: Any = None
 
 
 class Group:
@@ -40,6 +43,7 @@ class Group:
 
     def __init__(self) -> None:
         self.tabs: list[Tab] = []
+        self.expanded: bool = True
 
     def add_tab(self, tab: Tab, position: int | None = None) -> None:
         if position is None:
@@ -53,10 +57,6 @@ class Group:
 
 class Unsorted(Group):
     name = "Unsorted"
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.expanded: bool = True
 
 
 class Project(Group):
@@ -76,6 +76,9 @@ class Project(Group):
         self.id = id if id is not None else uuid.uuid4().hex
         self.startup_commands: list[StartupCommand] = list(startup_commands or [])
         self.spawn_blank_after_startup = spawn_blank_after_startup
+        # Forward-compat: unknown fields read from disk are preserved here
+        # and re-emitted on save so older code doesn't drop newer schema keys.
+        self._extra: dict[str, Any] = {}
 
 
 class Workspace:
