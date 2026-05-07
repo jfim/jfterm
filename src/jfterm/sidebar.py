@@ -95,13 +95,17 @@ class Sidebar(Gtk.ScrolledWindow):
         new_proj_btn.connect("clicked", lambda _b: self.emit("new-project-requested"))
         self._box.append(new_proj_btn)
 
-        for project in self._ws.projects:
+        for idx, project in enumerate(self._ws.projects):
+            if idx > 0:
+                self._add_separator()
             self._add_project_row(project)
             if project.expanded:
                 for tab in project.tabs:
                     self._add_tab_row(project, tab)
                 self._add_drop_sentinel(project)
 
+        if self._ws.projects:
+            self._add_separator()
         self._add_unsorted_row(self._ws.unsorted)
         if self._ws.unsorted.expanded:
             for tab in self._ws.unsorted.tabs:
@@ -138,6 +142,14 @@ class Sidebar(Gtk.ScrolledWindow):
 
         target.connect("drop", _on_drop)
         row.add_controller(target)
+
+    def _add_separator(self) -> None:
+        sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        sep.set_margin_top(6)
+        sep.set_margin_bottom(6)
+        sep.set_margin_start(8)
+        sep.set_margin_end(8)
+        self._box.append(sep)
 
     def _add_drop_sentinel(self, group: Group) -> None:
         sentinel = Gtk.Box()
