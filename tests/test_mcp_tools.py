@@ -6,10 +6,12 @@ import pytest
 from tests.fakes import FakeController
 
 from jfterm.mcp_tools import (
+    FocusTabInput,
     ListProjectsInput,
     ListTabsInput,
     RestartTabInput,
     SpawnTabInput,
+    focus_tab,
     list_projects,
     list_tabs,
     restart_tab,
@@ -116,3 +118,18 @@ async def test_restart_tab_without_launched_command_raises():
     plain = ctrl.add_tab("alpha", "shell", launched_command=None)
     with pytest.raises(TabHasNoCommand):
         await restart_tab(ctrl, RestartTabInput(id=plain.id))
+
+
+async def test_focus_tab_records_and_returns_tab():
+    ctrl = FakeController()
+    ctrl.add_project("alpha", "/a")
+    spawned = ctrl.add_tab("alpha", "vim")
+    result = await focus_tab(ctrl, FocusTabInput(id=spawned.id))
+    assert result["tab"]["id"] == spawned.id
+    assert ctrl.focus_log == [spawned.id]
+
+
+async def test_focus_tab_unknown_id_raises():
+    ctrl = FakeController()
+    with pytest.raises(TabNotFound):
+        await focus_tab(ctrl, FocusTabInput(id="bogus"))

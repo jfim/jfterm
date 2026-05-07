@@ -744,6 +744,16 @@ class JFTermWindow(Adw.ApplicationWindow):
                     return self._tab_to_info(t, g.name)
         raise TabNotFound(tab_id)
 
+    def mcp_focus_tab(self, tab_id: str) -> TabInfo:
+        from jfterm.mcp_types import TabNotFound
+
+        for g in self.ws.all_groups():
+            for t in g.tabs:
+                if t.id == tab_id:
+                    self._on_tab_activated(self.sidebar, t)
+                    return self._tab_to_info(t, g.name)
+        raise TabNotFound(tab_id)
+
     # --- shortcut handlers ---
 
     def _shortcut_new_tab(self) -> None:

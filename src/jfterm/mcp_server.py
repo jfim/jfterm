@@ -12,10 +12,12 @@ import threading
 from mcp.server.fastmcp import FastMCP
 
 from jfterm.mcp_tools import (
+    FocusTabInput,
     ListProjectsInput,
     ListTabsInput,
     RestartTabInput,
     SpawnTabInput,
+    focus_tab,
     list_projects,
     list_tabs,
     restart_tab,
@@ -63,6 +65,18 @@ def build_server(controller: MCPController) -> FastMCP:
         """Restart a tab in place. Only valid for tabs spawned with a startup command."""
         try:
             return await restart_tab(controller, RestartTabInput(id=id))
+        except MCPError as e:
+            return {"error": type(e).__name__, "message": str(e)}
+
+    @mcp.tool()
+    async def focus_tab_tool(id: str) -> dict:
+        """Focus a tab — switch to it and bring its input to the foreground.
+
+        Use deliberately to direct the user's attention; spawn_tab does NOT
+        focus the new tab.
+        """
+        try:
+            return await focus_tab(controller, FocusTabInput(id=id))
         except MCPError as e:
             return {"error": type(e).__name__, "message": str(e)}
 

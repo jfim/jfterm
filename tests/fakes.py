@@ -28,6 +28,7 @@ class FakeController(MCPController):
         self.tabs: list[TabInfo] = []
         self.spawn_log: list[tuple[str, str]] = []
         self.restart_log: list[str] = []
+        self.focus_log: list[str] = []
 
     def add_project(self, name: str, directory: str) -> None:
         self.projects[name] = ProjectInfo(name=name, directory=directory, tab_count=0)
@@ -82,5 +83,12 @@ class FakeController(MCPController):
                 if tab.launched_command is None:
                     raise TabHasNoCommand(tab_id)
                 self.restart_log.append(tab_id)
+                return tab
+        raise TabNotFound(tab_id)
+
+    def focus_tab(self, tab_id: str) -> TabInfo:
+        for tab in self.tabs:
+            if tab.id == tab_id:
+                self.focus_log.append(tab_id)
                 return tab
         raise TabNotFound(tab_id)

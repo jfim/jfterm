@@ -53,3 +53,6 @@ class GtkMCPController(MCPController):
 
     def restart_tab(self, tab_id: str) -> TabInfo:
         return _on_gtk_thread(lambda: self._window.mcp_restart_tab(tab_id))
+
+    def focus_tab(self, tab_id: str) -> TabInfo:
+        return _on_gtk_thread(lambda: self._window.mcp_focus_tab(tab_id))
