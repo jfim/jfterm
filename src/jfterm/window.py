@@ -14,7 +14,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gdk, Gio, Gtk  # noqa: E402, I001
 
-from jfterm.flash import wrap_flash_command  # noqa: E402
+from jfterm.flash import unwrap_flash_title, wrap_flash_command  # noqa: E402
 from jfterm.models import (  # noqa: E402
     FlashCommand,
     Group,
@@ -367,6 +367,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             launched_command=spec.command,
             flash_name=flash_name,
             from_startup=from_startup,
+            flash_original_command=spec.command,
             linked_url=spec.url,
             linked_auto=spec.url is None,
             linked_source=linked_source,
@@ -955,6 +956,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         wrapped = wrap_flash_command(fc)
         tab = self._spawn_tab(project, command=wrapped, focus=fc.focus_on_launch)
         tab.flash_name = fc.name
+        tab.flash_original_command = fc.command
         tab.title = f"⚡ {fc.name}"
         self.sidebar.refresh()
 
@@ -1026,6 +1028,8 @@ class JFTermWindow(Adw.ApplicationWindow):
 
     def _on_tab_title_changed(self, tab: TerminalTab | LinkedTab, title: str) -> None:
         if tab.flash_name is not None:
+            if tab.flash_original_command:
+                title = unwrap_flash_title(title, tab.flash_original_command)
             tab.title = f"⚡ {tab.flash_name}: {title}" if title else f"⚡ {tab.flash_name}"
         elif getattr(tab, "from_startup", False):
             base = title or tab.launched_command or "tab"
