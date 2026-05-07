@@ -46,9 +46,7 @@ def build_items(ws: Workspace) -> list[LauncherItem]:
             continue
         items.append(LauncherItem(f"{p.name}: New Shell Tab", NewTabAction(p)))
         if p.startup_commands:
-            items.append(
-                LauncherItem(f"{p.name}: Run Startup Commands", StartupAction(p))
-            )
+            items.append(LauncherItem(f"{p.name}: Run Startup Commands", StartupAction(p)))
         for fc in p.flash_commands:
             items.append(LauncherItem(f"{p.name}: ⚡ {fc.name}", FlashAction(p, fc)))
         for t in p.tabs:
