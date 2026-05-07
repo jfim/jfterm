@@ -11,6 +11,41 @@ _URL_RE = re.compile(rb"https?://[^\s\x00-\x1f]+(?=[\s\x00-\x1f])")
 _TRAILING_TRIM = b").,;:!?]>\"'"
 
 
+_LOOPBACK_HOST = {
+    "0.0.0.0": "127.0.0.1",
+    "[::]": "[::1]",
+}
+
+
+def _rewrite_unspecified_host(url: str) -> str:
+    """Rewrite 0.0.0.0 / [::] in the host part to loopback. Browsers
+    refuse to navigate to unspecified bind addresses (Chrome's Private
+    Network Access blocks 0.0.0.0; WebKit similarly rejects it), but
+    servers commonly print them. Path/query/fragment are untouched.
+    """
+    from urllib.parse import urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    host = parts.hostname
+    if host is None:
+        return url
+    bracketed_host = f"[{host}]" if ":" in host else host
+    replacement = _LOOPBACK_HOST.get(bracketed_host) or _LOOPBACK_HOST.get(host)
+    if replacement is None:
+        return url
+    # Rebuild netloc preserving userinfo and port.
+    new_host = replacement
+    userinfo = ""
+    if parts.username is not None:
+        userinfo = parts.username
+        if parts.password is not None:
+            userinfo += f":{parts.password}"
+        userinfo += "@"
+    port_part = f":{parts.port}" if parts.port is not None else ""
+    new_netloc = f"{userinfo}{new_host}{port_part}"
+    return urlunsplit((parts.scheme, new_netloc, parts.path, parts.query, parts.fragment))
+
+
 class UrlScanner:
     """Buffers bytes from a terminal output stream and exposes the first
     http(s) URL it observes.
@@ -41,9 +76,10 @@ class UrlScanner:
             return
         url_bytes = m.group(0).rstrip(_TRAILING_TRIM)
         try:
-            self._url = url_bytes.decode("utf-8")
+            decoded = url_bytes.decode("utf-8")
         except UnicodeDecodeError:
-            self._url = url_bytes.decode("utf-8", errors="replace")
+            decoded = url_bytes.decode("utf-8", errors="replace")
+        self._url = _rewrite_unspecified_host(decoded)
 
     def first_url(self) -> str | None:
         return self._url
