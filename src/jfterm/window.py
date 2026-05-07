@@ -301,6 +301,10 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _on_launch_project(self, _sb, project: Project) -> None:
         if not project.startup_commands:
             return
+        if not project.expanded:
+            project.expanded = True
+            save_projects(self.ws, default_path())
+            self.sidebar.refresh()
         from gi.repository import GLib
 
         cmds = list(project.startup_commands)
