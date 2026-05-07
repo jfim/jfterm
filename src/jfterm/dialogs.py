@@ -502,5 +502,5 @@ def show_new_web_tab_dialog(
 
     entry.connect("activate", _on_activate)
     dialog.present(parent)
-    entry.grab_focus()
+    entry.grab_focus_without_selecting()
     entry.set_position(-1)
