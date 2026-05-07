@@ -3,16 +3,24 @@
 A terminal for people juggling multiple projects — per-project tab groups and
 one-click access to each project's setup.
 
-![JFTerm screenshot](images/screenshot.png)
+![JFTerm main window](images/main-window.png)
 
 ## Features
 
 - Per-project tab groups in a sidebar, plus an Unsorted bucket for ad-hoc tabs.
-- One-click launch of a project's configured startup commands.
+- One-click launch of a project's configured startup commands, with
+  per-command delays, drag-and-drop reordering, and skipping of commands
+  already running in the project.
+- Flash commands: a per-project menu of one-off commands you can fire into
+  a new tab from the sidebar.
+- Restart button on tabs spawned from a startup command — kills the shell
+  and re-runs the original command in place.
 - Status dot per tab showing whether the shell is busy and whether the cwd
   matches the tab's project.
 - Drag-and-drop to move tabs between projects.
 - Built on GTK 4 / libadwaita with VTE 3.91 for the terminal itself.
+
+![Project preferences dialog](images/project-preferences.png)
 
 ## Running
 
