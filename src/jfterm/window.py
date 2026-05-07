@@ -312,7 +312,8 @@ class JFTermWindow(Adw.ApplicationWindow):
             self.sidebar.refresh()
         from gi.repository import GLib
 
-        cmds = list(project.startup_commands)
+        running = {t.launched_command for t in project.tabs if t.launched_command}
+        cmds = [sc for sc in project.startup_commands if sc.command not in running]
         spawn_blank = project.spawn_blank_after_startup
 
         def _step(idx: int) -> bool:
