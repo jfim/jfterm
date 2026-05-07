@@ -125,21 +125,35 @@ class JFTermWindow(Adw.ApplicationWindow):
         return tab
 
     def _wire_terminal(self, tab: Tab, terminal: JFTermTerminal) -> None:
+        # Each handler only acts when the signal comes from the tab's CURRENT
+        # terminal. After a restart the old terminal lingers long enough to
+        # emit child-exited (and possibly other signals) asynchronously; those
+        # must not mutate the tab that now owns a fresh terminal.
         terminal.connect(
             "cwd-changed",
-            lambda _t, path, t=tab: self._on_tab_cwd_changed(t, path),
+            lambda _t, path, t=tab, term=terminal: (
+                self._on_tab_cwd_changed(t, path) if t.terminal is term else None
+            ),
         )
         terminal.connect(
             "running-changed",
-            lambda _t, running, t=tab: self._on_tab_running_changed(t, running),
+            lambda _t, running, t=tab, term=terminal: (
+                self._on_tab_running_changed(t, running)
+                if t.terminal is term
+                else None
+            ),
         )
         terminal.connect(
             "title-changed",
-            lambda _t, title, t=tab: self._on_tab_title_changed(t, title),
+            lambda _t, title, t=tab, term=terminal: (
+                self._on_tab_title_changed(t, title) if t.terminal is term else None
+            ),
         )
         terminal.connect(
             "child-exited",
-            lambda _t, _status, t=tab: self._on_close_tab(self.sidebar, t),
+            lambda _t, _status, t=tab, term=terminal: (
+                self._on_close_tab(self.sidebar, t) if t.terminal is term else None
+            ),
         )
 
     def _on_close_tab(self, _sb, tab: Tab) -> None:
