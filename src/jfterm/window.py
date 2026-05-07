@@ -1149,9 +1149,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             self._empty_buttons.remove(child)
 
         shell_btn = Gtk.Button(label="New shell tab")
-        shell_btn.connect(
-            "clicked", lambda _b: self._on_new_tab(self.sidebar, self.ws.unsorted)
-        )
+        shell_btn.connect("clicked", lambda _b: self._on_new_tab(self.sidebar, self.ws.unsorted))
         self._empty_buttons.append(shell_btn)
 
         web_btn = Gtk.Button(label="New web tab")
@@ -1169,9 +1167,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         if len(launchable) == 1:
             sole = launchable[0]
             launch_btn = Gtk.Button(label=f"Launch {sole.name}")
-            launch_btn.connect(
-                "clicked", lambda _b: self._on_launch_project(self.sidebar, sole)
-            )
+            launch_btn.connect("clicked", lambda _b: self._on_launch_project(self.sidebar, sole))
             self._empty_buttons.append(launch_btn)
         elif len(launchable) > 1:
             launch_btn = Gtk.MenuButton(label="Launch project")
