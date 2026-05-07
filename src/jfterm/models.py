@@ -85,6 +85,7 @@ class Project(Group):
         startup_commands: list[StartupCommand] | None = None,
         spawn_blank_after_startup: bool = False,
         flash_commands: list[FlashCommand] | None = None,
+        archived: bool = False,
     ) -> None:
         super().__init__()
         self.name = name
@@ -94,6 +95,7 @@ class Project(Group):
         self.startup_commands: list[StartupCommand] = list(startup_commands or [])
         self.spawn_blank_after_startup = spawn_blank_after_startup
         self.flash_commands: list[FlashCommand] = list(flash_commands or [])
+        self.archived = archived
         # Forward-compat: unknown fields read from disk are preserved here
         # and re-emitted on save so older code doesn't drop newer schema keys.
         self._extra: dict[str, Any] = {}
@@ -106,6 +108,15 @@ class Workspace:
         self.projects: list[Project] = []
         self.unsorted = Unsorted()
         self.sidebar_width: int = 220
+        self.archived_expanded: bool = False
+
+    @property
+    def active_projects(self) -> list[Project]:
+        return [p for p in self.projects if not p.archived]
+
+    @property
+    def archived_projects(self) -> list[Project]:
+        return [p for p in self.projects if p.archived]
 
     def add_project(self, name: str, directory: str) -> Project:
         p = Project(name=name, directory=directory)
