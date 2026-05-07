@@ -34,6 +34,7 @@ class Sidebar(Gtk.ScrolledWindow):
         "restart-tab-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "configure-project-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "launch-project-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
+        "flash-command-launched": (GObject.SignalFlags.RUN_FIRST, None, (object, object)),
         "new-project-requested": (GObject.SignalFlags.RUN_FIRST, None, ()),
         "toggle-expanded-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "dot-clicked": (GObject.SignalFlags.RUN_FIRST, None, (object, object, object)),
@@ -149,6 +150,13 @@ class Sidebar(Gtk.ScrolledWindow):
             lambda _b, p=project: self.emit("launch-project-requested", p),
         )
 
+        flash = Gtk.MenuButton()
+        flash.set_icon_name("weather-storm-symbolic")
+        flash.add_css_class("flat")
+        flash.set_tooltip_text("Flash commands")
+        flash.set_sensitive(bool(project.flash_commands))
+        flash.set_popover(self._build_flash_popover(project))
+
         cog = Gtk.Button.new_from_icon_name("emblem-system-symbolic")
         cog.add_css_class("flat")
         cog.set_tooltip_text("Settings")
@@ -162,9 +170,35 @@ class Sidebar(Gtk.ScrolledWindow):
         plus.set_tooltip_text("New tab")
         plus.connect("clicked", lambda _b, p=project: self.emit("new-tab-requested", p))
 
-        for w in (chevron, label_btn, play, cog, plus):
+        for w in (chevron, label_btn, play, flash, cog, plus):
             row.append(w)
         self._box.append(row)
+
+    def _build_flash_popover(self, project: Project) -> Gtk.Popover:
+        pop = Gtk.Popover()
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        box.set_margin_start(4)
+        box.set_margin_end(4)
+        box.set_margin_top(4)
+        box.set_margin_bottom(4)
+        if not project.flash_commands:
+            empty = Gtk.Label(label="(no flash commands)")
+            empty.add_css_class("dim-label")
+            box.append(empty)
+        else:
+            for fc in project.flash_commands:
+                btn = Gtk.Button(label=fc.name)
+                btn.add_css_class("flat")
+                btn.set_halign(Gtk.Align.FILL)
+
+                def _on_click(_b, p=project, c=fc, popover=pop):
+                    popover.popdown()
+                    self.emit("flash-command-launched", p, c)
+
+                btn.connect("clicked", _on_click)
+                box.append(btn)
+        pop.set_child(box)
+        return pop
 
     def _add_unsorted_row(self, group: Group) -> None:
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
