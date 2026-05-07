@@ -77,6 +77,8 @@ class JFTermWindow(Adw.ApplicationWindow):
         paned.set_start_child(self.sidebar)
         paned.set_end_child(self.terminal_stack)
         paned.set_shrink_start_child(False)
+        paned.set_resize_start_child(False)
+        paned.set_resize_end_child(True)
         paned.set_position(self.ws.sidebar_width)
         # Persist width on drag, debounced so we don't write on every pixel.
         self._paned = paned
