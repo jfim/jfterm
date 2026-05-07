@@ -41,3 +41,29 @@ def test_load_unknown_keys_are_ignored(tmp_path: Path):
 def test_default_path_uses_xdg_config_home(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     assert default_path() == tmp_path / "jfterm" / "settings.json"
+
+
+def test_load_default_launcher_shortcut(tmp_path: Path):
+    s = load(tmp_path / "missing.json")
+    assert s.launcher_shortcut == "double_shift"
+
+
+def test_save_then_load_roundtrips_launcher_shortcut(tmp_path: Path):
+    path = tmp_path / "settings.json"
+    save(AppSettings(launcher_shortcut="ctrl_shift_p"), path)
+    s = load(path)
+    assert s.launcher_shortcut == "ctrl_shift_p"
+
+
+def test_load_unknown_launcher_shortcut_falls_back(tmp_path: Path):
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"launcher_shortcut": "double_alt"}))
+    s = load(path)
+    assert s.launcher_shortcut == "double_shift"
+
+
+def test_load_non_string_launcher_shortcut_falls_back(tmp_path: Path):
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"launcher_shortcut": 42}))
+    s = load(path)
+    assert s.launcher_shortcut == "double_shift"
