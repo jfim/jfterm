@@ -68,7 +68,20 @@ Each tab row has a status dot with two visual axes:
 
 ## Development
 
-    uv run pytest -v
+Common dev tasks are wrapped as [`just`](https://github.com/casey/just)
+recipes — run `just` with no args to list them. The most useful ones:
+
+    just check       # everything CI runs: lint, fmt-check, typecheck, test
+    just test        # pytest (extra args forwarded, e.g. `just test -v`)
+    just lint        # uv run ruff check .
+    just lint-fix    # uv run ruff check --fix .
+    just fmt         # uv run ruff format .
+    just typecheck   # uv run pyright
+    just run         # launch the app
+
+If you don't want to install `just`, the recipes are thin wrappers around
+`uv run …` and can be invoked directly (e.g. `uv run pytest`,
+`uv run ruff check .`).
 
 Pure-logic modules (models, persistence, matching) are covered by tests.
 GUI behavior is verified manually.
