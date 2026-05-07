@@ -242,7 +242,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         tab.pty_fd = None
         tab.is_running = False
         tab.osc133_seen = False
-        tab.title = command
+        tab.title = f"▶ {command}" if tab.from_startup else command
 
         self._wire_terminal(tab, new_terminal)
         self.terminal_stack.add_child(new_terminal)
@@ -334,7 +334,9 @@ class JFTermWindow(Adw.ApplicationWindow):
             sc = cmds[idx]
             is_last = idx == len(cmds) - 1
             focus = sc.delay > 0 or (is_last and not spawn_blank)
-            self._spawn_tab(project, command=sc.command, focus=focus)
+            tab = self._spawn_tab(project, command=sc.command, focus=focus)
+            tab.from_startup = True
+            tab.title = f"▶ {sc.command}"
             if idx + 1 < len(cmds) or spawn_blank:
                 if sc.delay > 0:
                     GLib.timeout_add_seconds(sc.delay, _step, idx + 1)
@@ -401,6 +403,9 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _on_tab_title_changed(self, tab: Tab, title: str) -> None:
         if tab.flash_name is not None:
             tab.title = f"⚡ {tab.flash_name}: {title}" if title else f"⚡ {tab.flash_name}"
+        elif tab.from_startup:
+            base = title or tab.launched_command or "tab"
+            tab.title = f"▶ {base}"
         else:
             tab.title = title
         self.sidebar.refresh()
