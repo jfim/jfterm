@@ -38,3 +38,31 @@ run:
 # Sync dev dependencies.
 sync:
     uv sync
+
+# --- Desktop install (user-local) ---
+
+install_dir   := `echo "$HOME/.local/share/jfterm"`
+bin_dir       := `echo "$HOME/.local/bin"`
+apps_dir      := `echo "$HOME/.local/share/applications"`
+icon_dir      := `echo "$HOME/.local/share/icons/hicolor/scalable/apps"`
+
+# Install jfterm as a desktop application (user-local).
+install:
+    uv venv --system-site-packages --python 3.12 "{{install_dir}}/venv"
+    uv pip install --python "{{install_dir}}/venv/bin/python" .
+    install -Dm755 packaging/jfterm.sh "{{bin_dir}}/jfterm"
+    install -Dm644 data/dev.jfim.jfterm.desktop "{{apps_dir}}/dev.jfim.jfterm.desktop"
+    install -Dm644 data/icons/dev.jfim.jfterm.svg "{{icon_dir}}/dev.jfim.jfterm.svg"
+    -update-desktop-database "{{apps_dir}}"
+    -gtk-update-icon-cache -f "$HOME/.local/share/icons/hicolor"
+    @echo "jfterm installed. Launch from your application menu or run: jfterm"
+
+# Remove the desktop install.
+uninstall:
+    rm -f "{{bin_dir}}/jfterm"
+    rm -f "{{apps_dir}}/dev.jfim.jfterm.desktop"
+    rm -f "{{icon_dir}}/dev.jfim.jfterm.svg"
+    rm -rf "{{install_dir}}"
+    -update-desktop-database "{{apps_dir}}"
+    -gtk-update-icon-cache -f "$HOME/.local/share/icons/hicolor"
+    @echo "jfterm uninstalled."
