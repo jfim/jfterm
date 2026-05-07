@@ -79,7 +79,7 @@ class JFTermLinkedView(Gtk.Paned):
         and from auto-mode when the scanner picks one up."""
         # JFTermWebView exposes load via its internal _web; reuse the
         # entry-activate behavior by loading via the public webkit method.
-        self.web_view._web.load_uri(url)  # noqa: SLF001 — internal but stable
+        self.web_view._web.load_uri(url)
 
     def collapse_webview(self) -> None:
         """Shrink the webview to a hairline so the terminal fills the
@@ -92,4 +92,4 @@ class JFTermLinkedView(Gtk.Paned):
         return self.terminal.grab_focus()
 
 
-__all__ = ["JFTermLinkedView", "is_available", "COLLAPSED_WEBVIEW_PX"]
+__all__ = ["COLLAPSED_WEBVIEW_PX", "JFTermLinkedView", "is_available"]
