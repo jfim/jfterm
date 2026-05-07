@@ -93,7 +93,7 @@ class PtyProxy(GObject.Object):
             self.emit("progress-changed", ev.state, ev.value)
         return True
 
-    def _on_child_exited(self, pid: int, status: int) -> None:
+    def _on_child_exited(self, _: int, status: int) -> None:
         self._child_watch = None
         self._child_pid = None
         self.emit("child-exited", status)
