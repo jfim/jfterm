@@ -3,7 +3,11 @@ import os
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from gi.repository import GLib, GObject, Vte
+import gi
+
+gi.require_version("Vte", "3.91")
+
+from gi.repository import GLib, GObject, Vte  # noqa: E402
 
 
 class JFTermTerminal(Vte.Terminal):

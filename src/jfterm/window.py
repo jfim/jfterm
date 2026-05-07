@@ -4,12 +4,17 @@ import contextlib
 import os
 import signal
 
-from gi.repository import Adw, Gtk
+import gi
 
-from jfterm.models import Group, Project, StartupCommand, Tab, Workspace
-from jfterm.persistence import default_path, load_projects, save_projects
-from jfterm.sidebar import Sidebar
-from jfterm.terminal import JFTermTerminal
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+
+from gi.repository import Adw, Gtk  # noqa: E402
+
+from jfterm.models import Group, Project, StartupCommand, Tab, Workspace  # noqa: E402
+from jfterm.persistence import default_path, load_projects, save_projects  # noqa: E402
+from jfterm.sidebar import Sidebar  # noqa: E402
+from jfterm.terminal import JFTermTerminal  # noqa: E402
 
 
 class JFTermWindow(Adw.ApplicationWindow):
