@@ -12,8 +12,8 @@ gi.require_version("Vte", "3.91")
 from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Pango, Vte  # noqa: E402
 
 from jfterm.palettes import get as get_palette  # noqa: E402
-from jfterm.settings import AppSettings  # noqa: E402
 from jfterm.pty_proxy import PtyProxy  # noqa: E402
+from jfterm.settings import AppSettings  # noqa: E402
 
 
 class JFTermTerminal(Vte.Terminal):
