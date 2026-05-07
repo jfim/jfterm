@@ -34,6 +34,12 @@ def test_unwrap_restores_original_from_brace_prefix():
     assert unwrap_flash_title("{ mix phx.server; }", "mix phx.server") == "mix phx.server"
 
 
+def test_unwrap_handles_requoted_tail():
+    # Bash may emit the wrapper tail with different quoting than we built.
+    title = '{ mix phx.server; }; __ec=$?; if [ $__ec -eq 0 ]; then exit; else echo Command failed; fi'
+    assert unwrap_flash_title(title, "mix phx.server") == "mix phx.server"
+
+
 def test_unwrap_passes_through_unrelated_titles():
     assert unwrap_flash_title("user@host: ~", "mix phx.server") == "user@host: ~"
     assert unwrap_flash_title("", "mix phx.server") == ""
