@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=jfterm
+GenericName=Terminal
+Comment=Terminal with project-grouped tabs
+Exec=jfterm
+Icon=dev.jfim.jfterm
+Terminal=false
+Categories=System;TerminalEmulator;
+StartupWMClass=dev.jfim.jfterm
+StartupNotify=true
+Keywords=shell;prompt;command;commandline;cmd;
