@@ -61,6 +61,7 @@ class Project(Group):
         expanded: bool = True,
         id: str | None = None,
         startup_commands: list[StartupCommand] | None = None,
+        spawn_blank_after_startup: bool = False,
     ) -> None:
         super().__init__()
         self.name = name
@@ -68,6 +69,7 @@ class Project(Group):
         self.expanded = expanded
         self.id = id if id is not None else uuid.uuid4().hex
         self.startup_commands: list[StartupCommand] = list(startup_commands or [])
+        self.spawn_blank_after_startup = spawn_blank_after_startup
 
 
 class Workspace:

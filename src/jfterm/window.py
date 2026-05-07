@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from gi.repository import Adw, Gtk
 
-from jfterm.models import Group, Project, Tab, Workspace
+from jfterm.models import Group, Project, StartupCommand, Tab, Workspace
 from jfterm.persistence import default_path, load_projects, save_projects
 from jfterm.sidebar import Sidebar
 from jfterm.terminal import JFTermTerminal
@@ -163,9 +163,15 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _on_new_project(self, _sb) -> None:
         from jfterm.dialogs import show_project_dialog
 
-        def _save(name: str, directory: str, commands: list[str]) -> None:
+        def _save(
+            name: str,
+            directory: str,
+            commands: list[StartupCommand],
+            spawn_blank_after_startup: bool,
+        ) -> None:
             p = self.ws.add_project(name=name, directory=directory)
             p.startup_commands = commands
+            p.spawn_blank_after_startup = spawn_blank_after_startup
             save_projects(self.ws, default_path())
             self.sidebar.refresh()
 
@@ -174,10 +180,16 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _on_configure_project(self, _sb, project: Project) -> None:
         from jfterm.dialogs import show_project_dialog
 
-        def _save(name: str, directory: str, commands: list[str]) -> None:
+        def _save(
+            name: str,
+            directory: str,
+            commands: list[StartupCommand],
+            spawn_blank_after_startup: bool,
+        ) -> None:
             project.name = name
             project.directory = directory
             project.startup_commands = commands
+            project.spawn_blank_after_startup = spawn_blank_after_startup
             save_projects(self.ws, default_path())
             self.sidebar.refresh()
 
@@ -194,6 +206,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             initial_name=project.name,
             initial_directory=project.directory,
             initial_commands=project.startup_commands,
+            initial_spawn_blank_after_startup=project.spawn_blank_after_startup,
             on_save=_save,
             on_disband=_disband,
         )
@@ -204,13 +217,16 @@ class JFTermWindow(Adw.ApplicationWindow):
         from gi.repository import GLib
 
         cmds = list(project.startup_commands)
+        spawn_blank = project.spawn_blank_after_startup
 
         def _step(idx: int) -> bool:
             if idx >= len(cmds):
+                if spawn_blank:
+                    self._spawn_tab(project, focus=True)
                 return False  # remove timeout
             sc = cmds[idx]
             self._spawn_tab(project, command=sc.command, focus=(idx == 0))
-            if idx + 1 < len(cmds):
+            if idx + 1 < len(cmds) or spawn_blank:
                 if sc.delay > 0:
                     GLib.timeout_add_seconds(sc.delay, _step, idx + 1)
                 else:

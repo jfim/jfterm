@@ -23,7 +23,8 @@ def show_project_dialog(
     initial_name: str = "",
     initial_directory: str = "",
     initial_commands: list[StartupCommand] | None = None,
-    on_save: Callable[[str, str, list[StartupCommand]], None],
+    initial_spawn_blank_after_startup: bool = False,
+    on_save: Callable[[str, str, list[StartupCommand], bool], None],
     on_disband: Callable[[], None] | None = None,
 ) -> None:
     dlg = Adw.Window(transient_for=parent, modal=True, title=title, default_width=480)
@@ -183,6 +184,9 @@ def show_project_dialog(
     add_cmd_btn.add_css_class("flat")
     add_cmd_btn.connect("clicked", lambda _b: _add_command_row())
 
+    spawn_blank_check = Gtk.CheckButton(label="Spawn blank terminal after startup")
+    spawn_blank_check.set_active(initial_spawn_blank_after_startup)
+
     # --- action buttons ---
 
     actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -201,7 +205,7 @@ def show_project_dialog(
             for _row, entry, delay_w in command_rows
             if (text := entry.get_text().strip())
         ]
-        on_save(name, directory, commands)
+        on_save(name, directory, commands, spawn_blank_check.get_active())
         dlg.close()
 
     save_btn.connect("clicked", _on_save_clicked)
@@ -232,6 +236,7 @@ def show_project_dialog(
         commands_header,
         commands_box,
         add_cmd_btn,
+        spawn_blank_check,
         actions,
     ):
         box.append(w)
