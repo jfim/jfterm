@@ -341,9 +341,7 @@ class JFTermWindow(Adw.ApplicationWindow):
 
         _step(0)
 
-    def _on_flash_command_launched(
-        self, _sb, project: Project, fc: FlashCommand
-    ) -> None:
+    def _on_flash_command_launched(self, _sb, project: Project, fc: FlashCommand) -> None:
         if not project.expanded:
             project.expanded = True
             save_projects(self.ws, default_path())

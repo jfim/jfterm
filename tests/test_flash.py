@@ -11,7 +11,7 @@ def test_wrap_close_on_success_wraps_with_exit_logic():
     fc = FlashCommand(name="X", command="echo hi")
     out = wrap_flash_command(fc)
     assert out == (
-        '{ echo hi; }; __ec=$?; if [ $__ec -eq 0 ]; then exit; '
+        "{ echo hi; }; __ec=$?; if [ $__ec -eq 0 ]; then exit; "
         'else echo "Command failed (exit $__ec)"; fi'
     )
 
