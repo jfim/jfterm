@@ -105,10 +105,14 @@ needs `libgirepository-2.0-dev` and is slow. **Run this once before the
 first `uv run`** — a plain `uv sync` auto-creates a venv *without* that
 flag, which then fails with `ModuleNotFoundError: No module named 'gi'`:
 
-    uv venv --system-site-packages --python /usr/bin/python3
+    just venv
+
+…which is equivalent to:
+
+    uv venv --system-site-packages --python 3.12
     uv sync
 
-If you delete `.venv`, repeat the `uv venv …` step before `uv sync`.
+If you delete `.venv`, re-run `just venv`.
 
 Pure-logic modules (models, persistence, matching) are covered by tests.
 GUI behavior is verified manually.
