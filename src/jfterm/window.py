@@ -59,7 +59,14 @@ class JFTermWindow(Adw.ApplicationWindow):
         paned.connect("notify::position", self._on_paned_position_changed)
 
         toolbar = Adw.ToolbarView()
-        toolbar.add_top_bar(Adw.HeaderBar())
+        header = Adw.HeaderBar()
+        self._sidebar_toggle = Gtk.ToggleButton()
+        self._sidebar_toggle.set_icon_name("sidebar-show-symbolic")
+        self._sidebar_toggle.set_tooltip_text("Hide sidebar")
+        self._sidebar_toggle.set_active(True)
+        self._sidebar_toggle.connect("toggled", self._on_sidebar_toggled)
+        header.pack_start(self._sidebar_toggle)
+        toolbar.add_top_bar(header)
         toolbar.set_content(paned)
         self.set_content(toolbar)
 
@@ -464,6 +471,11 @@ class JFTermWindow(Adw.ApplicationWindow):
             self.terminal_stack.set_visible_child(nxt.terminal)
             self.sidebar.set_active_tab(nxt)
             nxt.terminal.grab_focus()
+
+    def _on_sidebar_toggled(self, btn: Gtk.ToggleButton) -> None:
+        visible = btn.get_active()
+        self.sidebar.set_visible(visible)
+        btn.set_tooltip_text("Hide sidebar" if visible else "Show sidebar")
 
     def _on_paned_position_changed(self, _paned, _pspec) -> None:
         from gi.repository import GLib
