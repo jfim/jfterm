@@ -78,6 +78,10 @@ class TabProgressBar(Gtk.Widget):
         self._stop_animation()
         Gtk.Widget.do_unmap(self)
 
+    def do_unrealize(self) -> None:  # type: ignore[override]
+        self._stop_animation()
+        Gtk.Widget.do_unrealize(self)
+
     def do_snapshot(self, snapshot: Gtk.Snapshot) -> None:  # type: ignore[override]
         if self._state == 0:
             return
