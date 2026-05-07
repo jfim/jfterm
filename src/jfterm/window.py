@@ -262,10 +262,12 @@ class JFTermWindow(Adw.ApplicationWindow):
             directory: str,
             commands: list[StartupCommand],
             spawn_blank_after_startup: bool,
+            flash_commands: list[FlashCommand],
         ) -> None:
             p = self.ws.add_project(name=name, directory=directory)
             p.startup_commands = commands
             p.spawn_blank_after_startup = spawn_blank_after_startup
+            p.flash_commands = flash_commands
             save_projects(self.ws, default_path())
             self.sidebar.refresh()
 
@@ -279,11 +281,13 @@ class JFTermWindow(Adw.ApplicationWindow):
             directory: str,
             commands: list[StartupCommand],
             spawn_blank_after_startup: bool,
+            flash_commands: list[FlashCommand],
         ) -> None:
             project.name = name
             project.directory = directory
             project.startup_commands = commands
             project.spawn_blank_after_startup = spawn_blank_after_startup
+            project.flash_commands = flash_commands
             save_projects(self.ws, default_path())
             self.sidebar.refresh()
 
@@ -301,6 +305,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             initial_directory=project.directory,
             initial_commands=project.startup_commands,
             initial_spawn_blank_after_startup=project.spawn_blank_after_startup,
+            initial_flash_commands=project.flash_commands,
             on_save=_save,
             on_disband=_disband,
         )
