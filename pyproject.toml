@@ -26,8 +26,9 @@ dev = [
 include = ["src", "tests"]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
-# gi.repository ships no type stubs; suppress import noise.
-reportMissingImports = false
+# Local stubs in ./typings declare gi.repository submodules as Any so
+# pyright doesn't flag every PyGObject import as an attribute error.
+stubPath = "typings"
 reportMissingModuleSource = false
 
 [tool.ruff]
