@@ -468,7 +468,7 @@ def show_new_web_tab_dialog(
 
     body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
     entry = Gtk.Entry()
-    entry.set_text("https://")
+    entry.set_placeholder_text("https://")
     entry.set_hexpand(True)
     error_label = Gtk.Label()
     error_label.add_css_class("error")
@@ -502,18 +502,4 @@ def show_new_web_tab_dialog(
 
     entry.connect("activate", _on_activate)
     dialog.present(parent)
-    def _deselect(_e: Gtk.Entry, _p: GObject.ParamSpec) -> None:
-        if entry.get_selection_bounds():
-            entry.select_region(-1, -1)
-            entry.set_position(-1)
-
-    entry.connect("notify::has-focus", _deselect)
-    entry.connect("notify::cursor-position", _deselect)
-
-    def _focus_at_end() -> bool:
-        entry.grab_focus_without_selecting()
-        entry.set_position(-1)
-        entry.select_region(-1, -1)
-        return False
-
-    GLib.idle_add(_focus_at_end)
+    GLib.idle_add(entry.grab_focus)
