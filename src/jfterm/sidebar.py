@@ -5,7 +5,7 @@ from collections.abc import Callable
 from gi.repository import Gdk, GObject, Gtk
 
 from jfterm.matching import is_inside, matching_projects
-from jfterm.models import Group, Project, Tab, Workspace
+from jfterm.models import Group, Project, Tab, TerminalTab, Workspace
 from jfterm.progress_bar import TabProgressBar
 from jfterm.status_dot import StatusDot
 
@@ -396,19 +396,20 @@ class Sidebar(Gtk.ScrolledWindow):
         if tab is self._active_tab:
             row.add_css_class("jfterm-active-tab")
 
-        dot = StatusDot()
-        dot.set_valign(Gtk.Align.CENTER)
-        if isinstance(group, Project):
-            filled = is_inside(tab.current_cwd, group.directory)
-        else:
-            # Unsorted: filled when no project would match.
-            filled = not matching_projects(tab.current_cwd, self._ws.projects)
-        dot.set_state(running=tab.is_running, filled=filled)
-        tab._dot = dot  # so the runtime layer can update without a full refresh
-        dot.connect(
-            "clicked",
-            lambda _d, t=tab, g=group, anchor=dot: self.emit("dot-clicked", t, g, anchor),
-        )
+        dot: StatusDot | None = None
+        if isinstance(tab, TerminalTab):
+            dot = StatusDot()
+            dot.set_valign(Gtk.Align.CENTER)
+            if isinstance(group, Project):
+                filled = is_inside(tab.current_cwd, group.directory)
+            else:
+                filled = not matching_projects(tab.current_cwd, self._ws.projects)
+            dot.set_state(running=tab.is_running, filled=filled)
+            tab._dot = dot
+            dot.connect(
+                "clicked",
+                lambda _d, t=tab, g=group, anchor=dot: self.emit("dot-clicked", t, g, anchor),
+            )
 
         title = Gtk.Button()
         title.add_css_class("flat")
@@ -430,7 +431,7 @@ class Sidebar(Gtk.ScrolledWindow):
         tab._progress_bar = progress_bar  # type: ignore[attr-defined]  # runtime back-ref, like _dot
 
         restart = None
-        if tab.launched_command:
+        if isinstance(tab, TerminalTab) and tab.launched_command:
             restart = Gtk.Button.new_from_icon_name("view-refresh-symbolic")
             restart.add_css_class("flat")
             restart.set_tooltip_text("Restart command")
@@ -450,7 +451,14 @@ class Sidebar(Gtk.ScrolledWindow):
         self._attach_drag(row, tab)
         self._attach_drop(row, group, lambda pos=position_in_group: pos)
 
-        widgets: list[Gtk.Widget] = [dot, title_overlay]
+        widgets: list[Gtk.Widget] = []
+        if dot is not None:
+            widgets.append(dot)
+        else:
+            spacer = Gtk.Box()
+            spacer.set_size_request(12, -1)  # match StatusDot width (see status_dot.py)
+            widgets.append(spacer)
+        widgets.append(title_overlay)
         if restart is not None:
             widgets.append(restart)
         widgets.append(close)

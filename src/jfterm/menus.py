@@ -5,12 +5,12 @@ from collections.abc import Callable
 from gi.repository import Gtk
 
 from jfterm.matching import matching_projects
-from jfterm.models import Group, Tab, Unsorted, Workspace
+from jfterm.models import Group, TerminalTab, Unsorted, Workspace
 
 
 def build_move_to_popover(
     ws: Workspace,
-    tab: Tab,
+    tab: TerminalTab,
     current_group: Group,
     on_move: Callable[[Group], None],
 ) -> Gtk.Popover:

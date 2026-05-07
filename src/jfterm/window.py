@@ -12,7 +12,15 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from jfterm.flash import wrap_flash_command  # noqa: E402
-from jfterm.models import FlashCommand, Group, Project, StartupCommand, Tab, Workspace  # noqa: E402
+from jfterm.models import (  # noqa: E402
+    FlashCommand,
+    Group,
+    Project,
+    StartupCommand,
+    Tab,
+    TerminalTab,
+    Workspace,
+)
 from jfterm.persistence import default_path, load_projects, save_projects  # noqa: E402
 from jfterm.sidebar import Sidebar  # noqa: E402
 from jfterm.terminal import JFTermTerminal  # noqa: E402
@@ -110,7 +118,7 @@ class JFTermWindow(Adw.ApplicationWindow):
 
     # --- handlers ---
 
-    def _on_tab_activated(self, _sb, tab: Tab) -> None:
+    def _on_tab_activated(self, _sb, tab: TerminalTab) -> None:
         if tab.terminal is not None:
             self._current_group = self.ws._find_group(tab)
             self.terminal_stack.set_visible_child(tab.terminal)
@@ -126,12 +134,12 @@ class JFTermWindow(Adw.ApplicationWindow):
         *,
         command: str | None = None,
         focus: bool = True,
-    ) -> Tab:
+    ) -> TerminalTab:
         cwd = group.directory if isinstance(group, Project) else None
         terminal = JFTermTerminal(cwd=cwd, send_after_spawn=command)
         terminal.set_vexpand(True)
         terminal.set_hexpand(True)
-        tab = Tab(
+        tab = TerminalTab(
             title=command or "(starting…)",
             terminal=terminal,
             launched_command=command,
@@ -147,7 +155,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.sidebar.refresh()
         return tab
 
-    def _wire_terminal(self, tab: Tab, terminal: JFTermTerminal) -> None:
+    def _wire_terminal(self, tab: TerminalTab, terminal: JFTermTerminal) -> None:
         # Each handler only acts when the signal comes from the tab's CURRENT
         # terminal. After a restart the old terminal lingers long enough to
         # emit child-exited (and possibly other signals) asynchronously; those
@@ -183,7 +191,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             ),
         )
 
-    def _on_close_tab(self, _sb, tab: Tab) -> None:
+    def _on_close_tab(self, _sb, tab: TerminalTab) -> None:
         if tab.is_restarting:
             return
         group = self.ws._find_group(tab)
@@ -208,14 +216,14 @@ class JFTermWindow(Adw.ApplicationWindow):
             new_idx = min(idx, len(group.tabs) - 1)
             self._current_group = group
             promoted = group.tabs[new_idx]
-            self.terminal_stack.set_visible_child(promoted.terminal)
             self.sidebar.set_active_tab(promoted)
-            if promoted.terminal is not None:
+            if isinstance(promoted, TerminalTab) and promoted.terminal is not None:
+                self.terminal_stack.set_visible_child(promoted.terminal)
                 promoted.terminal.grab_focus()
         else:
             self._show_group_empty(group)
 
-    def _on_restart_tab(self, _sb, tab: Tab) -> None:
+    def _on_restart_tab(self, _sb, tab: TerminalTab) -> None:
         if not tab.launched_command:
             return
         from gi.repository import GLib
@@ -401,7 +409,11 @@ class JFTermWindow(Adw.ApplicationWindow):
             self.sidebar.refresh()
         from gi.repository import GLib
 
-        running = {t.launched_command for t in project.tabs if t.launched_command}
+        running = {
+            t.launched_command
+            for t in project.tabs
+            if isinstance(t, TerminalTab) and t.launched_command
+        }
         cmds = [sc for sc in project.startup_commands if sc.command not in running]
         spawn_blank = project.spawn_blank_after_startup
 
@@ -441,7 +453,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         save_projects(self.ws, default_path())
         self.sidebar.refresh()
 
-    def _on_dot_clicked(self, _sb, tab: Tab, current_group: Group, anchor) -> None:
+    def _on_dot_clicked(self, _sb, tab: TerminalTab, current_group: Group, anchor) -> None:
         from jfterm.menus import build_move_to_popover
 
         def _move(dest: Group) -> None:
@@ -455,7 +467,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         pop.set_parent(anchor)
         pop.popup()
 
-    def _on_tab_dropped(self, _sb, tab: Tab, dest_group: Group, position: int) -> None:
+    def _on_tab_dropped(self, _sb, tab: TerminalTab, dest_group: Group, position: int) -> None:
         # Within-group + drop below source: removing first shifts indices.
         src_group = self.ws._find_group(tab)
         adjusted = position
@@ -469,11 +481,11 @@ class JFTermWindow(Adw.ApplicationWindow):
         self._refresh_tab_dot(tab)
         self.sidebar.refresh()
 
-    def _on_tab_cwd_changed(self, tab: Tab, path: str) -> None:
+    def _on_tab_cwd_changed(self, tab: TerminalTab, path: str) -> None:
         tab.current_cwd = path
         self._refresh_tab_dot(tab)
 
-    def _on_tab_running_changed(self, tab: Tab, running: bool) -> None:
+    def _on_tab_running_changed(self, tab: TerminalTab, running: bool) -> None:
         if tab.is_running == running:
             return
         tab.is_running = running
@@ -491,7 +503,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         if bar is not None:
             bar.set_progress(0, 0)
 
-    def _on_tab_title_changed(self, tab: Tab, title: str) -> None:
+    def _on_tab_title_changed(self, tab: TerminalTab, title: str) -> None:
         if tab.flash_name is not None:
             tab.title = f"⚡ {tab.flash_name}: {title}" if title else f"⚡ {tab.flash_name}"
         elif tab.from_startup:
@@ -503,7 +515,7 @@ class JFTermWindow(Adw.ApplicationWindow):
 
     # --- helpers ---
 
-    def _refresh_tab_dot(self, tab: Tab) -> None:
+    def _refresh_tab_dot(self, tab: TerminalTab) -> None:
         from jfterm.matching import is_inside, matching_projects
 
         try:
@@ -535,11 +547,11 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _shortcut_prev_tab(self) -> None:
         self._cycle_tab(-1)
 
-    def _current_tab(self) -> Tab | None:
+    def _current_tab(self) -> TerminalTab | None:
         visible = self.terminal_stack.get_visible_child()
         for g in self.ws.all_groups():
             for t in g.tabs:
-                if t.terminal is visible:
+                if isinstance(t, TerminalTab) and t.terminal is visible:
                     return t
         return None
 
@@ -550,7 +562,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         cur = self._current_tab()
         idx = flat.index(cur) if cur in flat else -1
         nxt = flat[(idx + delta) % len(flat)]
-        if nxt.terminal is not None:
+        if isinstance(nxt, TerminalTab) and nxt.terminal is not None:
             self._current_group = self.ws._find_group(nxt)
             self.terminal_stack.set_visible_child(nxt.terminal)
             self.sidebar.set_active_tab(nxt)
