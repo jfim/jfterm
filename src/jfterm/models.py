@@ -109,11 +109,21 @@ class LinkedTab(Tab):
     launched_command: str | None = None
     flash_name: str | None = None
     is_restarting: bool = False
+    # True when launched from a project's startup commands. Used to prefix
+    # the tab title with "▶ " (mirrors TerminalTab.from_startup).
+    from_startup: bool = False
 
     # The URL we are showing (or about to show, in `auto` mode after
     # the scanner picks one up). None means we are still waiting in
     # auto-detect mode.
     linked_url: str | None = None
+    # True when the tab was spawned in `linked: auto …` mode (vs. an
+    # explicit URL). Persists across restarts so the scanner can be
+    # re-armed when the terminal is restarted.
+    linked_auto: bool = False
+    # For linked tabs spawned from startup commands: the original
+    # `linked: …` source line, used to dedup re-launches.
+    linked_source: str | None = None
 
     @property
     def widget(self) -> Any:

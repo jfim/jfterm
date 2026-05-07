@@ -573,7 +573,7 @@ class Sidebar(Gtk.ScrolledWindow):
         tab._progress_bar = progress_bar  # type: ignore[attr-defined]  # runtime back-ref, like _dot
 
         restart = None
-        if isinstance(tab, TerminalTab) and tab.launched_command:
+        if isinstance(tab, (TerminalTab, LinkedTab)) and tab.launched_command:
             restart = Gtk.Button.new_from_icon_name("view-refresh-symbolic")
             restart.add_css_class("flat")
             restart.set_tooltip_text("Restart command")
