@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <rect width="128" height="128" rx="22" fill="#1a1a24"/>
+  <text x="64" y="82" text-anchor="middle"
+        font-family="ui-monospace, 'JetBrains Mono', 'DejaVu Sans Mono', 'Fira Code', monospace"
+        font-weight="700" font-size="44" fill="#c9d1d9">JF<tspan fill="#7ee787">&gt;_</tspan></text>
+</svg>
