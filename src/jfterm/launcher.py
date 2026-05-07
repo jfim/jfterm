@@ -58,7 +58,9 @@ class Launcher:
 
     @staticmethod
     def recents_in_items(recents: list[Action], items: list[LauncherItem]) -> list[Action]:
-        present = {it.action for it in items}
+        # List-based membership — Action wraps non-frozen dataclasses
+        # (e.g. FlashCommand) so hashing is unavailable; equality works.
+        present = [it.action for it in items]
         return [a for a in recents if a in present]
 
     def open(self, workspace: Workspace) -> None:
@@ -151,8 +153,12 @@ class Launcher:
         self._store.remove_all()
         if query == "":
             visible_actions = Launcher.recents_in_items(self._recents, self._items)
-            display_by_action = {it.action: it.display for it in self._items}
-            rows = [_LauncherRow(display=display_by_action[a], action=a) for a in visible_actions]
+            rows = []
+            for a in visible_actions:
+                for it in self._items:
+                    if it.action == a:
+                        rows.append(_LauncherRow(display=it.display, action=a))
+                        break
         else:
             filtered = Launcher.filter_items(query, self._items)
             rows = [_LauncherRow(display=it.display, action=it.action) for it in filtered]
