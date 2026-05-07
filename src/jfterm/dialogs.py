@@ -3,9 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gdk, GObject, Gtk
 
 from jfterm.models import StartupCommand
+
+
+class _RowRef(GObject.Object):
+    """Carrier so a startup-command row can travel through GValue DnD."""
+
+    def __init__(self, row: Gtk.Widget) -> None:
+        super().__init__()
+        self.row = row
 
 
 def show_project_dialog(
@@ -63,11 +71,39 @@ def show_project_dialog(
     # --- startup commands editor ---
 
     commands_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-    # Each entry is (Gtk.Entry for command, Gtk.SpinButton for delay).
-    command_rows: list[tuple[Gtk.Entry, Gtk.SpinButton]] = []
+    # Each entry is (row container, Gtk.Entry for command, Gtk.SpinButton for delay).
+    command_rows: list[tuple[Gtk.Box, Gtk.Entry, Gtk.SpinButton]] = []
+
+    def _move_row(src_row: Gtk.Box, dst_row: Gtk.Box) -> None:
+        if src_row is dst_row:
+            return
+        src_idx = next(
+            (i for i, t in enumerate(command_rows) if t[0] is src_row), None
+        )
+        dst_idx = next(
+            (i for i, t in enumerate(command_rows) if t[0] is dst_row), None
+        )
+        if src_idx is None or dst_idx is None:
+            return
+        item = command_rows.pop(src_idx)
+        new_dst = next(
+            i for i, t in enumerate(command_rows) if t[0] is dst_row
+        )
+        command_rows.insert(new_dst, item)
+        # Sync the GTK box order to match command_rows.
+        for r, _, _ in command_rows:
+            commands_box.remove(r)
+        for r, _, _ in command_rows:
+            commands_box.append(r)
 
     def _add_command_row(initial_text: str = "", initial_delay: int = 0) -> None:
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+
+        handle = Gtk.Image.new_from_icon_name("open-menu-symbolic")
+        handle.add_css_class("dim-label")
+        handle.set_tooltip_text("Drag to reorder")
+        handle.set_cursor(Gdk.Cursor.new_from_name("grab", None))
+
         entry = Gtk.Entry(
             placeholder_text="e.g. docker compose up postgres"
         )
@@ -85,16 +121,51 @@ def show_project_dialog(
         delete.add_css_class("flat")
         delete.set_tooltip_text("Remove command")
 
-        def _on_delete(_b, r=row, pair=(entry, delay)):
+        def _on_delete(_b, r=row):
             commands_box.remove(r)
-            command_rows.remove(pair)
+            for i, t in enumerate(command_rows):
+                if t[0] is r:
+                    command_rows.pop(i)
+                    break
 
         delete.connect("clicked", _on_delete)
+
+        # Drag source on the handle; carries a _RowRef pointing at this row.
+        src = Gtk.DragSource()
+        src.set_actions(Gdk.DragAction.MOVE)
+
+        def _prepare(_s, _x, _y, r=row):
+            v = GObject.Value()
+            v.init(_RowRef.__gtype__)
+            v.set_object(_RowRef(r))
+            return Gdk.ContentProvider.new_for_value(v)
+
+        def _drag_begin(s, _drag, r=row):
+            s.set_icon(Gtk.WidgetPaintable.new(r), 0, 0)
+
+        src.connect("prepare", _prepare)
+        src.connect("drag-begin", _drag_begin)
+        handle.add_controller(src)
+
+        # Drop target on the row: dropping here moves the source to this row.
+        target = Gtk.DropTarget.new(_RowRef.__gtype__, Gdk.DragAction.MOVE)
+
+        def _on_drop(_t, value, _x, _y, dst=row):
+            src_row = value.row if isinstance(value, _RowRef) else None
+            if src_row is None:
+                return False
+            _move_row(src_row, dst)
+            return True
+
+        target.connect("drop", _on_drop)
+        row.add_controller(target)
+
+        row.append(handle)
         row.append(entry)
         row.append(delay)
         row.append(delete)
         commands_box.append(row)
-        command_rows.append((entry, delay))
+        command_rows.append((row, entry, delay))
 
     for sc in initial_commands or []:
         _add_command_row(sc.command, sc.delay)
@@ -118,7 +189,7 @@ def show_project_dialog(
             return
         commands = [
             StartupCommand(command=text, delay=int(delay_w.get_value()))
-            for entry, delay_w in command_rows
+            for _row, entry, delay_w in command_rows
             if (text := entry.get_text().strip())
         ]
         on_save(name, directory, commands)
