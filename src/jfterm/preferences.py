@@ -8,8 +8,9 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, GObject, Gtk, Pango  # noqa: E402
 
+from jfterm.launcher_shortcut import LAUNCHER_SHORTCUT_PRESETS  # noqa: E402
 from jfterm.palettes import PALETTES  # noqa: E402
-from jfterm.settings import AppSettings  # noqa: E402
+from jfterm.settings import LAUNCHER_SHORTCUT_IDS, AppSettings  # noqa: E402
 
 
 class _MonospaceFilter(Gtk.Filter):
@@ -43,6 +44,7 @@ class AppPreferencesDialog(Adw.PreferencesDialog):
             mcp_enabled=settings.mcp_enabled,
             mcp_host=settings.mcp_host,
             mcp_port=settings.mcp_port,
+            launcher_shortcut=settings.launcher_shortcut,
         )
 
         page = Adw.PreferencesPage()
@@ -89,6 +91,25 @@ class AppPreferencesDialog(Adw.PreferencesDialog):
         self._palette_row.connect("notify::selected", self._on_palette_changed)
         group.add(self._palette_row)
 
+        # --- Quick launcher shortcut row ---
+        shortcut_names = Gtk.StringList()
+        for preset_id in LAUNCHER_SHORTCUT_IDS:
+            shortcut_names.append(LAUNCHER_SHORTCUT_PRESETS[preset_id].label)
+        self._launcher_shortcut_row = Adw.ComboRow()
+        self._launcher_shortcut_row.set_title("Quick launcher shortcut")
+        self._launcher_shortcut_row.set_model(shortcut_names)
+        current_shortcut_index = next(
+            (
+                i
+                for i, sid in enumerate(LAUNCHER_SHORTCUT_IDS)
+                if sid == self._settings.launcher_shortcut
+            ),
+            0,
+        )
+        self._launcher_shortcut_row.set_selected(current_shortcut_index)
+        self._launcher_shortcut_row.connect("notify::selected", self._on_launcher_shortcut_changed)
+        group.add(self._launcher_shortcut_row)
+
         page.add(group)
 
         mcp_group = Adw.PreferencesGroup()
@@ -132,6 +153,12 @@ class AppPreferencesDialog(Adw.PreferencesDialog):
             self._settings.palette_id = PALETTES[idx].id
             self.emit("changed", self._copy())
 
+    def _on_launcher_shortcut_changed(self, row: Adw.ComboRow, _pspec) -> None:
+        idx = row.get_selected()
+        if 0 <= idx < len(LAUNCHER_SHORTCUT_IDS):
+            self._settings.launcher_shortcut = LAUNCHER_SHORTCUT_IDS[idx]
+            self.emit("changed", self._copy())
+
     def _on_mcp_enabled_changed(self, row: Adw.SwitchRow, _pspec) -> None:
         self._settings.mcp_enabled = row.get_active()
         self.emit("changed", self._copy())
@@ -151,4 +178,5 @@ class AppPreferencesDialog(Adw.PreferencesDialog):
             mcp_enabled=self._settings.mcp_enabled,
             mcp_host=self._settings.mcp_host,
             mcp_port=self._settings.mcp_port,
+            launcher_shortcut=self._settings.launcher_shortcut,
         )
