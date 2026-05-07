@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import shlex
 import signal
 import sys
 from collections.abc import Iterator
@@ -161,14 +162,17 @@ class JFTermWindow(Adw.ApplicationWindow):
         self._mcp_controller = None
         self._mcp_server = None
         if self._settings.mcp_enabled:
+            from jfterm import mcp_token
             from jfterm.mcp_gtk import GtkMCPController
             from jfterm.mcp_server import MCPServerThread
 
             self._mcp_controller = GtkMCPController(self)
+            token = mcp_token.load_or_create(mcp_token.default_path())
             self._mcp_server = MCPServerThread(
                 self._mcp_controller,
                 host=self._settings.mcp_host,
                 port=self._settings.mcp_port,
+                token=token,
             )
             self._mcp_server.start()
 
@@ -1187,7 +1191,38 @@ class JFTermWindow(Adw.ApplicationWindow):
         dialog = AppPreferencesDialog(self._settings)
         dialog.connect("changed", self._on_settings_changed)
         dialog.connect("closed", self._on_preferences_closed)
+        dialog.connect("configure-claude", self._on_configure_claude)
+        dialog.connect("rotate-token", self._on_rotate_token)
         dialog.present(self)
+
+    def _on_configure_claude(self, dialog: AppPreferencesDialog) -> None:
+        from jfterm import mcp_token
+
+        # Ensure the token exists even if MCP hasn't been started yet, so
+        # the spawned `claude mcp add` reads a real value.
+        mcp_token.load_or_create(mcp_token.default_path())
+        token_path = str(mcp_token.default_path())
+        host = self._settings.mcp_host or "127.0.0.1"
+        port = self._settings.mcp_port
+        # `$(cat ...)` keeps the literal token out of shell history; the
+        # token still ends up in claude's argv during the registration
+        # call, which is acceptable for a same-UID dev tool.
+        command = (
+            f"claude mcp add --transport http jfterm http://{host}:{port}/mcp "
+            f'--header "Authorization: Bearer $(cat {shlex.quote(token_path)})"'
+        )
+        self._spawn_tab(self.ws.unsorted, command=command, focus=True)
+        dialog.close()
+
+    def _on_rotate_token(self, dialog: AppPreferencesDialog) -> None:
+        from gi.repository import Adw
+
+        from jfterm import mcp_token
+
+        mcp_token.regenerate(mcp_token.default_path())
+        dialog.add_toast(
+            Adw.Toast.new("Bearer token rotated. Restart jfterm and reconfigure MCP clients.")
+        )
 
     def _on_preferences_closed(self, _dialog) -> None:
         # Adw.PreferencesDialog leaves the parent window with no focused

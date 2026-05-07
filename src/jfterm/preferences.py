@@ -33,6 +33,8 @@ class AppPreferencesDialog(Adw.PreferencesDialog):
 
     __gsignals__ = {
         "changed": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
+        "configure-claude": (GObject.SignalFlags.RUN_FIRST, None, ()),
+        "rotate-token": (GObject.SignalFlags.RUN_FIRST, None, ()),
     }
 
     def __init__(self, settings: AppSettings) -> None:
@@ -136,6 +138,29 @@ class AppPreferencesDialog(Adw.PreferencesDialog):
         self._mcp_port_row.set_value(self._settings.mcp_port)
         self._mcp_port_row.connect("notify::value", self._on_mcp_port_changed)
         mcp_group.add(self._mcp_port_row)
+
+        # --- Configure Claude Code row ---
+        configure_row = Adw.ActionRow()
+        configure_row.set_title("Configure Claude Code")
+        configure_row.set_subtitle("Spawn a tab that runs `claude mcp add` with the bearer token")
+        configure_btn = Gtk.Button(label="Configure")
+        configure_btn.set_valign(Gtk.Align.CENTER)
+        configure_btn.add_css_class("suggested-action")
+        configure_btn.connect("clicked", lambda _b: self.emit("configure-claude"))
+        configure_row.add_suffix(configure_btn)
+        configure_row.set_activatable_widget(configure_btn)
+        mcp_group.add(configure_row)
+
+        # --- Rotate token row ---
+        rotate_row = Adw.ActionRow()
+        rotate_row.set_title("Rotate bearer token")
+        rotate_row.set_subtitle("Generates a new token; existing MCP clients must be reconfigured")
+        rotate_btn = Gtk.Button(label="Rotate")
+        rotate_btn.set_valign(Gtk.Align.CENTER)
+        rotate_btn.connect("clicked", lambda _b: self.emit("rotate-token"))
+        rotate_row.add_suffix(rotate_btn)
+        rotate_row.set_activatable_widget(rotate_btn)
+        mcp_group.add(rotate_row)
 
         page.add(mcp_group)
         self.add(page)
