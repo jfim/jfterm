@@ -11,20 +11,24 @@ gi.require_version("Vte", "3.91")
 
 from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Vte  # noqa: E402
 
+from jfterm.pty_proxy import PtyProxy  # noqa: E402
+
 
 class JFTermTerminal(Vte.Terminal):
-    """A VTE terminal that has spawned a shell.
+    """A VTE terminal driven by an in-process pty proxy.
 
     Emits:
-      cwd-changed(str)      whenever VTE reports a new OSC 7 cwd
-      running-changed(bool) when foreground command starts/finishes
-      title-changed(str)    when VTE's window title changes (OSC 0/2)
+      cwd-changed(str)            whenever VTE reports a new OSC 7 cwd
+      running-changed(bool)       when foreground command starts/finishes
+      title-changed(str)          when VTE's window title changes (OSC 0/2)
+      progress-changed(int, int)  parsed OSC 9;4 (state, value)
     """
 
     __gsignals__ = {
         "cwd-changed": (GObject.SignalFlags.RUN_FIRST, None, (str,)),
         "running-changed": (GObject.SignalFlags.RUN_FIRST, None, (bool,)),
         "title-changed": (GObject.SignalFlags.RUN_FIRST, None, (str,)),
+        "progress-changed": (GObject.SignalFlags.RUN_FIRST, None, (int, int)),
     }
 
     def __init__(
@@ -33,21 +37,15 @@ class JFTermTerminal(Vte.Terminal):
         send_after_spawn: str | None = None,
     ) -> None:
         super().__init__()
-        self.shell_pid: int | None = None
-        self.pty_fd: int | None = None
         self._initial_cwd = cwd or str(Path.home())
         self._osc133_seen = False
-        # Feed this string (with a trailing newline) into the pty as soon as
-        # the shell has spawned. The shell will buffer it until ready and
-        # execute as if the user typed it.
         self._send_after_spawn = send_after_spawn
 
         self.connect("current-directory-uri-changed", self._on_cwd_uri_changed)
         self.connect("window-title-changed", self._on_title_changed)
+        self.connect("commit", self._on_commit)
+        self.connect("char-size-changed", self._on_char_size_changed)
 
-        # OSC 133 path A: connect whichever shell-integration signals VTE
-        # exposes on this version. If neither is available, the tcgetpgrp
-        # polling fallback below stays in charge.
         for sig, handler in (
             ("shell-preexec", self._on_shell_preexec),
             ("shell-precmd", self._on_shell_precmd),
@@ -56,26 +54,29 @@ class JFTermTerminal(Vte.Terminal):
                 self.connect(sig, handler)
 
         shell = os.environ.get("SHELL") or "/bin/bash"
-        self.spawn_async(
-            Vte.PtyFlags.DEFAULT,
-            self._initial_cwd,
-            [shell, "-l"],
-            None,
-            GLib.SpawnFlags.DEFAULT,
-            None,
-            None,
-            -1,
-            None,
-            self._on_spawned,
-            None,
-        )
+        self._proxy = PtyProxy(self._initial_cwd, [shell, "-l"])
+        self._proxy.connect("data-ready", self._on_proxy_data)
+        self._proxy.connect("progress-changed", self._on_proxy_progress)
+        self._proxy.connect("child-exited", self._on_proxy_child_exited)
 
-        # Polling fallback. Cancels itself once an OSC 133 marker is seen.
+        if self._send_after_spawn is not None:
+            # Shell may not have read its initial prompt yet; pty buffers it.
+            self._proxy.write((self._send_after_spawn + "\n").encode())
+            self._send_after_spawn = None
+
         self._poll_source: int | None = GLib.timeout_add(250, self._poll_tcgetpgrp)
 
         self._install_context_menu()
 
-    # --- context menu ---
+    @property
+    def shell_pid(self) -> int | None:
+        return self._proxy.shell_pid
+
+    @property
+    def pty_fd(self) -> int | None:
+        return self._proxy.pty_fd
+
+    # --- context menu (unchanged) ---
 
     def _install_context_menu(self) -> None:
         menu = Gio.Menu()
@@ -119,17 +120,6 @@ class JFTermTerminal(Vte.Terminal):
 
     # --- VTE callbacks ---
 
-    def _on_spawned(self, _term, pid, error, _user_data) -> None:
-        if error is not None:
-            raise RuntimeError(f"failed to spawn shell: {error.message}")
-        self.shell_pid = pid
-        pty = self.get_pty()
-        if pty is not None:
-            self.pty_fd = pty.get_fd()
-        if self._send_after_spawn is not None:
-            self.feed_child((self._send_after_spawn + "\n").encode())
-            self._send_after_spawn = None
-
     def _on_cwd_uri_changed(self, _t) -> None:
         uri = self.get_current_directory_uri()
         if not uri:
@@ -150,12 +140,39 @@ class JFTermTerminal(Vte.Terminal):
         self._osc133_seen = True
         self.emit("running-changed", False)
 
+    def _on_commit(self, _t, text: str, size: int) -> None:
+        # VTE's commit signal hands us already-encoded bytes as a Python
+        # string of length `size`. Convert via latin-1 to preserve bytes 1:1.
+        self._proxy.write(text[:size].encode("latin-1"))
+
+    def _on_char_size_changed(self, _t, _w, _h) -> None:
+        cols = self.get_column_count()
+        rows = self.get_row_count()
+        self._proxy.resize(rows, cols)
+
+    # --- proxy callbacks ---
+
+    def _on_proxy_data(self, _p, data: bytes) -> None:
+        self.feed(data)
+
+    def _on_proxy_progress(self, _p, state: int, value: int) -> None:
+        self.emit("progress-changed", state, value)
+
+    def _on_proxy_child_exited(self, _p, status: int) -> None:
+        # VTE has its own child-exited signal; we surface ours through the
+        # same name so existing subscribers (e.g. tab close-on-exit logic)
+        # keep working. If nothing currently subscribes, this is harmless.
+        # `child-exited` is a built-in VTE signal with a fixed signature;
+        # if our emit shape doesn't match, it raises TypeError — suppress it.
+        with contextlib.suppress(TypeError):
+            self.emit("child-exited", status)
+
     # --- polling fallback ---
 
     def _poll_tcgetpgrp(self) -> bool:
         if self._osc133_seen:
             self._poll_source = None
-            return False  # remove the source
+            return False
         if self.pty_fd is None or self.shell_pid is None:
             return True
         try:
