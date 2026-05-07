@@ -39,6 +39,8 @@ def show_project_dialog(
     initial_flash_commands: list[FlashCommand] | None = None,
     on_save: Callable[[str, str, list[StartupCommand], bool, list[FlashCommand]], None],
     on_disband: Callable[[], None] | None = None,
+    on_archive: Callable[[], None] | None = None,
+    n_open_tabs: int = 0,
 ) -> None:
     dlg = Adw.Window(transient_for=parent, modal=True, title=title, default_width=640)
 
@@ -376,6 +378,44 @@ def show_project_dialog(
 
         disband_btn.connect("clicked", _on_disband_clicked)
         actions.append(disband_btn)
+
+    if on_archive is not None:
+        archive_btn = Gtk.Button(label="Archive project")
+
+        def _do_archive():
+            on_archive()
+            dlg.close()
+
+        def _on_archive_clicked(_b):
+            if n_open_tabs <= 0:
+                _do_archive()
+                return
+            confirm = Adw.MessageDialog(
+                transient_for=dlg,
+                modal=True,
+                heading=f"Archive {initial_name or 'project'}?",
+                body=(
+                    f"This will close {n_open_tabs} tab"
+                    f"{'s' if n_open_tabs != 1 else ''}."
+                ),
+            )
+            confirm.add_response("cancel", "Cancel")
+            confirm.add_response("archive", "Archive")
+            confirm.set_response_appearance(
+                "archive", Adw.ResponseAppearance.DESTRUCTIVE
+            )
+            confirm.set_default_response("cancel")
+            confirm.set_close_response("cancel")
+
+            def _on_response(_d, response):
+                if response == "archive":
+                    _do_archive()
+
+            confirm.connect("response", _on_response)
+            confirm.present()
+
+        archive_btn.connect("clicked", _on_archive_clicked)
+        actions.append(archive_btn)
 
     actions.append(cancel_btn)
     actions.append(save_btn)
