@@ -12,7 +12,7 @@ class AppSettings:
     font_desc: str = ""  # Pango font string, e.g. "Monospace 11";
     # empty means "system default"
     palette_id: str = "system"
-    mcp_enabled: bool = True
+    mcp_enabled: bool = False
     mcp_host: str = "127.0.0.1"
     mcp_port: int = 7820
 
