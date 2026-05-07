@@ -60,3 +60,41 @@ def test_on_project_dropped_reorders_and_persists(tmp_path, monkeypatch):
 
     assert len(saves) == 2
     assert len(refreshes) == 2
+
+
+def test_dispatch_launcher_action_routes_to_existing_handlers():
+    from jfterm.launcher_items import (
+        FlashAction,
+        JumpAction,
+        NewTabAction,
+        StartupAction,
+    )
+    from jfterm.models import FlashCommand
+
+    ws = Workspace()
+    p = ws.add_project(name="Alpha", directory="/tmp/a")
+    fc = FlashCommand(name="Push", command="git push")
+    tab = TerminalTab(title="bash")
+    p.add_tab(tab)
+
+    calls: list[tuple] = []
+    fake = SimpleNamespace(
+        ws=ws,
+        sidebar=object(),
+        _on_flash_command_launched=lambda sb, proj, f: calls.append(("flash", proj, f)),
+        _spawn_tab=lambda proj: calls.append(("new", proj)),
+        _on_launch_project=lambda sb, proj: calls.append(("startup", proj)),
+        _on_tab_activated=lambda sb, t: calls.append(("jump", t)),
+    )
+
+    JFTermWindow._dispatch_launcher_action(fake, FlashAction(p, fc))  # pyright: ignore[reportArgumentType]
+    JFTermWindow._dispatch_launcher_action(fake, NewTabAction(p))  # pyright: ignore[reportArgumentType]
+    JFTermWindow._dispatch_launcher_action(fake, StartupAction(p))  # pyright: ignore[reportArgumentType]
+    JFTermWindow._dispatch_launcher_action(fake, JumpAction(tab))  # pyright: ignore[reportArgumentType]
+
+    assert calls == [
+        ("flash", p, fc),
+        ("new", p),
+        ("startup", p),
+        ("jump", tab),
+    ]

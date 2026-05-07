@@ -12,7 +12,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gio, Gtk  # noqa: E402, I001
+from gi.repository import Adw, Gdk, Gio, Gtk  # noqa: E402, I001
 
 from jfterm.flash import wrap_flash_command  # noqa: E402
 from jfterm.models import (  # noqa: E402
@@ -157,6 +157,21 @@ class JFTermWindow(Adw.ApplicationWindow):
         self._mcp_controller = GtkMCPController(self)
         self._mcp_server = MCPServerThread(self._mcp_controller)
         self._mcp_server.start()
+
+        # Command launcher (issue #19)
+        from jfterm.double_tap import DoubleTapDetector
+        from jfterm.launcher import Launcher
+
+        self._launcher = Launcher(self, dispatch=self._dispatch_launcher_action)
+        self._double_shift = DoubleTapDetector(
+            target_keyval=Gdk.KEY_Shift_L,
+            interval_ms=300,
+            callback=self._open_launcher,
+        )
+        key_ctrl = Gtk.EventControllerKey()
+        key_ctrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        key_ctrl.connect("key-pressed", self._on_window_key_pressed)
+        self.add_controller(key_ctrl)
 
     # --- handlers ---
 
@@ -890,3 +905,30 @@ class JFTermWindow(Adw.ApplicationWindow):
         self._current_group = group
         self.terminal_stack.set_visible_child_name("__empty_group__")
         self.sidebar.set_active_tab(None)
+
+    def _on_window_key_pressed(self, _ctrl, keyval, _keycode, _state) -> bool:
+        from gi.repository import GLib
+
+        self._double_shift.on_press(keyval, GLib.get_monotonic_time() // 1000)
+        return False
+
+    def _open_launcher(self) -> None:
+        self._double_shift.reset()
+        self._launcher.open(self.ws)
+
+    def _dispatch_launcher_action(self, action) -> None:
+        from jfterm.launcher_items import (
+            FlashAction,
+            JumpAction,
+            NewTabAction,
+            StartupAction,
+        )
+
+        if isinstance(action, FlashAction):
+            self._on_flash_command_launched(self.sidebar, action.project, action.flash)
+        elif isinstance(action, NewTabAction):
+            self._spawn_tab(action.project)
+        elif isinstance(action, StartupAction):
+            self._on_launch_project(self.sidebar, action.project)
+        elif isinstance(action, JumpAction):
+            self._on_tab_activated(self.sidebar, action.tab)
