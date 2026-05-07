@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
 
@@ -207,20 +208,16 @@ class JFTermWindow(Adw.ApplicationWindow):
 
         # SIGTERM now; SIGKILL after grace period if still alive.
         if old_pid is not None:
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 os.kill(old_pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
 
             def _force_kill(pid: int = old_pid) -> bool:
                 try:
                     os.kill(pid, 0)
                 except ProcessLookupError:
                     return False
-                try:
+                with contextlib.suppress(ProcessLookupError):
                     os.kill(pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
                 return False
 
             GLib.timeout_add(1500, _force_kill)
