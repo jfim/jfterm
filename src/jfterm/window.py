@@ -466,7 +466,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             self.sidebar.refresh()
 
         def _disband() -> None:
-            self._delete_project(project)
+            self._confirm_delete_project(project)
 
         def _archive() -> None:
             self._archive_project(project)
@@ -510,7 +510,31 @@ class JFTermWindow(Adw.ApplicationWindow):
         confirm.present()
 
     def _on_delete_project(self, _sb, project: Project) -> None:
-        self._delete_project(project)
+        self._confirm_delete_project(project)
+
+    def _confirm_delete_project(self, project: Project) -> None:
+        n = len(project.tabs)
+        body = "This will permanently delete the project."
+        if n > 0:
+            body += f" {n} open tab{'s' if n != 1 else ''} will be moved to Unsorted."
+        confirm = Adw.MessageDialog(
+            transient_for=self,
+            modal=True,
+            heading=f"Delete {project.name}?",
+            body=body,
+        )
+        confirm.add_response("cancel", "Cancel")
+        confirm.add_response("delete", "Delete")
+        confirm.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
+        confirm.set_default_response("cancel")
+        confirm.set_close_response("cancel")
+
+        def _on_response(_d, response):
+            if response == "delete":
+                self._delete_project(project)
+
+        confirm.connect("response", _on_response)
+        confirm.present()
 
     def _delete_project(self, project: Project) -> None:
         self.ws.disband(project)
