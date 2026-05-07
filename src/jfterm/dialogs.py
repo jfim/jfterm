@@ -490,5 +490,15 @@ def show_new_web_tab_dialog(
         on_confirm(url)
 
     dialog.connect("response", _on_response)
+    def _on_activate(_e: Gtk.Entry) -> None:
+        url = entry.get_text().strip()
+        if not is_web_url(url):
+            error_label.set_text("URL must start with http:// or https://")
+            error_label.set_visible(True)
+            return
+        dialog.close()
+        on_confirm(url)
+
+    entry.connect("activate", _on_activate)
     dialog.present(parent)
     entry.grab_focus_without_selecting()
