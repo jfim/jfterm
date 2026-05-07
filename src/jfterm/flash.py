@@ -32,17 +32,10 @@ def unwrap_flash_title(title: str, original: str) -> str:
     """
     if not title or not original:
         return title
-    wrapped = wrap_flash_command(
-        FlashCommand(name="", command=original, keep_open_on_success=False)
-    )
-    # Bash's DEBUG-trap title hooks may emit the full wrapped string, the
-    # brace-group prefix only (`{ cmd; };`), or the brace group without the
-    # trailing semicolon — accept all of them.
-    candidates = {
-        wrapped,
-        "{ " + original + "; }",
-        "{ " + original + "; };",
-    }
-    if title in candidates:
+    # Any title that starts with our brace-group prefix is a leak from the
+    # wrapper — the tail after `{ original; }` is bookkeeping (`__ec=$?`,
+    # exit-code branch) that bash may re-quote, so we match the prefix only.
+    prefix = "{ " + original + "; }"
+    if title == prefix or title.startswith(prefix + ";") or title.startswith(prefix + " "):
         return original
     return title
