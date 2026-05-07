@@ -65,22 +65,13 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.terminal_stack.set_vexpand(True)
         self.terminal_stack.set_hexpand(True)
 
-        empty = Gtk.Label(label="No tabs — click + to create one")
-        empty.set_vexpand(True)
-        empty.set_hexpand(True)
-        self.terminal_stack.add_named(empty, "__empty_global__")
-
-        # Reused per-group empty panel; label updated each time it's shown.
-        self._group_empty_label = Gtk.Label()
-        self._group_empty_label.set_vexpand(True)
-        self._group_empty_label.set_hexpand(True)
-        self.terminal_stack.add_named(self._group_empty_label, "__empty_group__")
-
-        self.terminal_stack.set_visible_child_name("__empty_global__")
         # The "current group" is the group whose context the right pane is
         # showing. None at startup; set when the user picks/creates a tab or
         # opens a per-group empty state.
         self._current_group: Group | None = None
+        self._empty_state = self._build_empty_state()
+        self.terminal_stack.add_named(self._empty_state, "__empty__")
+        self.terminal_stack.set_visible_child_name("__empty__")
 
         paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         paned.set_start_child(self.sidebar)
@@ -509,7 +500,7 @@ class JFTermWindow(Adw.ApplicationWindow):
                 self.terminal_stack.set_visible_child(promoted.widget)
                 promoted.widget.grab_focus()
         else:
-            self._show_group_empty(group)
+            self._show_empty(group)
 
     def _on_restart_tab(self, _sb, tab: TerminalTab) -> None:
         if not tab.launched_command:
@@ -589,6 +580,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             p.flash_commands = flash_commands
             save_projects(self.ws, default_path())
             self.sidebar.refresh()
+            self._refresh_empty_state()
 
         show_project_dialog(self, title="New project", on_save=_save)
 
@@ -687,6 +679,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             self._current_group = self.ws.unsorted
         save_projects(self.ws, default_path())
         self.sidebar.refresh()
+        self._refresh_empty_state()
 
     def _archive_project(self, project: Project) -> None:
         # Close every tab via the standard close path so child processes
@@ -696,16 +689,16 @@ class JFTermWindow(Adw.ApplicationWindow):
             self._on_close_tab(self.sidebar, tab)
         project.archived = True
         if self._current_group is project:
-            self._current_group = self.ws.unsorted
-            self.terminal_stack.set_visible_child_name("__empty_global__")
-            self.sidebar.set_active_tab(None)
+            self._show_empty(self.ws.unsorted)
         save_projects(self.ws, default_path())
         self.sidebar.refresh()
+        self._refresh_empty_state()
 
     def _on_unarchive_project(self, _sb, project: Project) -> None:
         project.archived = False
         save_projects(self.ws, default_path())
         self.sidebar.refresh()
+        self._refresh_empty_state()
 
     def _on_toggle_archived_expanded(self, _sb) -> None:
         self.ws.archived_expanded = not self.ws.archived_expanded
@@ -1120,14 +1113,81 @@ class JFTermWindow(Adw.ApplicationWindow):
         # 500ms after the user stops dragging, write to disk.
         self._sidebar_save_source = GLib.timeout_add(500, _flush)
 
-    def _show_group_empty(self, group: Group) -> None:
-        if isinstance(group, Project):
-            self._group_empty_label.set_text(f"Project {group.name} has no tabs.")
-        else:
-            self._group_empty_label.set_text("Unsorted has no tabs.")
+    def _show_empty(self, group: Group | None = None) -> None:
         self._current_group = group
-        self.terminal_stack.set_visible_child_name("__empty_group__")
+        self._refresh_empty_state()
+        self.terminal_stack.set_visible_child_name("__empty__")
         self.sidebar.set_active_tab(None)
+
+    def _build_empty_state(self) -> Gtk.Widget:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_vexpand(True)
+        box.set_hexpand(True)
+
+        self._empty_message = Gtk.Label()
+        self._empty_message.add_css_class("title-2")
+        box.append(self._empty_message)
+
+        self._empty_buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self._empty_buttons.set_halign(Gtk.Align.CENTER)
+        box.append(self._empty_buttons)
+
+        self._refresh_empty_state()
+        return box
+
+    def _refresh_empty_state(self) -> None:
+        active_projects = self.ws.active_projects
+        has_projects = bool(active_projects)
+        if has_projects:
+            self._empty_message.set_text("Open a new tab by clicking +")
+        else:
+            self._empty_message.set_text("Create a project or open a new tab by clicking +")
+
+        while (child := self._empty_buttons.get_first_child()) is not None:
+            self._empty_buttons.remove(child)
+
+        target_group = self._current_group or self.ws.unsorted
+
+        shell_btn = Gtk.Button(label="New shell tab")
+        shell_btn.connect("clicked", lambda _b: self._on_new_tab(self.sidebar, target_group))
+        self._empty_buttons.append(shell_btn)
+
+        web_btn = Gtk.Button(label="New web tab")
+        web_btn.connect(
+            "clicked", lambda _b: self._on_new_web_tab(self.sidebar, target_group, "")
+        )
+        self._empty_buttons.append(web_btn)
+
+        if not has_projects:
+            new_proj_btn = Gtk.Button(label="New project")
+            new_proj_btn.connect("clicked", lambda _b: self._on_new_project(self.sidebar))
+            self._empty_buttons.append(new_proj_btn)
+        elif len(active_projects) == 1:
+            sole = active_projects[0]
+            launch_btn = Gtk.Button(label=f"Launch {sole.name}")
+            launch_btn.connect(
+                "clicked", lambda _b: self._on_launch_project(self.sidebar, sole)
+            )
+            self._empty_buttons.append(launch_btn)
+        else:
+            launch_btn = Gtk.MenuButton(label="Launch project")
+            popover = Gtk.Popover()
+            pbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            for p in active_projects:
+                item = Gtk.Button(label=p.name)
+                item.add_css_class("flat")
+
+                def _launch(_b, proj=p, pop=popover) -> None:
+                    pop.popdown()
+                    self._on_launch_project(self.sidebar, proj)
+
+                item.connect("clicked", _launch)
+                pbox.append(item)
+            popover.set_child(pbox)
+            launch_btn.set_popover(popover)
+            self._empty_buttons.append(launch_btn)
 
     def _on_window_key_pressed(self, _ctrl, keyval, _keycode, _state) -> bool:
         from gi.repository import GLib
