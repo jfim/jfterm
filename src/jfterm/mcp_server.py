@@ -6,10 +6,13 @@ runs streamable-HTTP on a daemon thread bound to 127.0.0.1.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import secrets
 import threading
 
 from mcp.server.fastmcp import FastMCP
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from jfterm.mcp_tools import (
     FocusTabInput,
@@ -95,6 +98,53 @@ def build_server(controller: MCPController) -> FastMCP:
     return mcp
 
 
+class BearerAuthMiddleware:
+    """ASGI middleware that requires `Authorization: Bearer <token>`.
+
+    Constant-time comparison via `secrets.compare_digest` so timing leaks
+    don't help an attacker brute-force the token. Non-HTTP scopes
+    (lifespan) pass through untouched so uvicorn startup still works.
+    """
+
+    def __init__(self, app: ASGIApp, token: str) -> None:
+        self._app = app
+        self._token = token
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+        headers = dict(scope.get("headers") or [])
+        auth = headers.get(b"authorization", b"").decode("latin-1", errors="replace")
+        if not auth.startswith("Bearer "):
+            await _send_401(send)
+            return
+        presented = auth[len("Bearer ") :].strip()
+        if not secrets.compare_digest(presented, self._token):
+            await _send_401(send)
+            return
+        await self._app(scope, receive, send)
+
+
+async def _send_401(send: Send) -> None:
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 401,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"www-authenticate", b'Bearer realm="jfterm"'),
+            ],
+        }
+    )
+    await send(
+        {
+            "type": "http.response.body",
+            "body": b'{"error":"unauthorized"}',
+        }
+    )
+
+
 class MCPServerThread:
     """Runs FastMCP's streamable-HTTP transport on a daemon thread.
 
@@ -102,24 +152,36 @@ class MCPServerThread:
     process exit kills the thread (daemon=True). Two instances of
     JFTerm on the same machine collide on the port — the second logs
     the bind error and the app continues without an MCP server.
+
+    When `token` is provided, every HTTP request must carry
+    `Authorization: Bearer <token>`; this is the only authentication
+    layer between local processes and the workspace-control API.
     """
 
-    def __init__(self, controller: MCPController, host: str = "127.0.0.1", port: int = 7820):
+    def __init__(
+        self,
+        controller: MCPController,
+        host: str = "127.0.0.1",
+        port: int = 7820,
+        token: str | None = None,
+    ):
         self._controller = controller
         self._host = host
         self._port = port
+        self._token = token
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
         if self._thread is not None:
             return
+
         mcp = build_server(self._controller)
         mcp.settings.host = self._host
         mcp.settings.port = self._port
 
         def _run() -> None:
             try:
-                mcp.run(transport="streamable-http")
+                asyncio.run(self._serve(mcp))
             except OSError as e:
                 log.warning("MCP server failed to bind %s:%d: %s", self._host, self._port, e)
             except Exception:
@@ -127,4 +189,24 @@ class MCPServerThread:
 
         self._thread = threading.Thread(target=_run, name="jfterm-mcp", daemon=True)
         self._thread.start()
-        log.info("MCP server starting on http://%s:%d/mcp", self._host, self._port)
+        log.info(
+            "MCP server starting on http://%s:%d/mcp (auth: %s)",
+            self._host,
+            self._port,
+            "bearer" if self._token else "none",
+        )
+
+    async def _serve(self, mcp: FastMCP) -> None:
+        import uvicorn
+
+        app: ASGIApp = mcp.streamable_http_app()
+        if self._token:
+            app = BearerAuthMiddleware(app, self._token)
+        config = uvicorn.Config(
+            app,
+            host=self._host,
+            port=self._port,
+            log_level=mcp.settings.log_level.lower(),
+        )
+        server = uvicorn.Server(config)
+        await server.serve()
