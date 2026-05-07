@@ -20,6 +20,8 @@ one-click access to each project's setup.
 - Status dot per tab showing whether the shell is busy and whether the cwd
   matches the tab's project.
 - Drag-and-drop to move tabs between projects.
+- Command launcher: double-tap Left Shift to fuzzy-search every flash
+  command, project action, and open tab in one ranked list.
 - Web tabs: any startup or flash command starting with `http://` or
   `https://` opens a WebKitGTK mini-browser (back/forward/reload + URL
   bar) in place of a shell. Right-click a group's `+` button for an
