@@ -1148,15 +1148,15 @@ class JFTermWindow(Adw.ApplicationWindow):
         while (child := self._empty_buttons.get_first_child()) is not None:
             self._empty_buttons.remove(child)
 
-        target_group = self._current_group or self.ws.unsorted
-
         shell_btn = Gtk.Button(label="New shell tab")
-        shell_btn.connect("clicked", lambda _b: self._on_new_tab(self.sidebar, target_group))
+        shell_btn.connect(
+            "clicked", lambda _b: self._on_new_tab(self.sidebar, self.ws.unsorted)
+        )
         self._empty_buttons.append(shell_btn)
 
         web_btn = Gtk.Button(label="New web tab")
         web_btn.connect(
-            "clicked", lambda _b: self._on_new_web_tab(self.sidebar, target_group, "")
+            "clicked", lambda _b: self._on_new_web_tab(self.sidebar, self.ws.unsorted, "")
         )
         self._empty_buttons.append(web_btn)
 
