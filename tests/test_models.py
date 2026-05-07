@@ -60,3 +60,10 @@ def test_reorder_tab_within_group():
 
     ws.move_tab(t3, a, position=0)
     assert [t.title for t in a.tabs] == ["3", "1", "2"]
+
+
+def test_tab_has_launched_command_and_is_restarting_defaults():
+    from jfterm.models import Tab
+    t = Tab(title="x")
+    assert t.launched_command is None
+    assert t.is_restarting is False
