@@ -101,6 +101,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         if tab.terminal is not None:
             self._current_group = self.ws._find_group(tab)
             self.terminal_stack.set_visible_child(tab.terminal)
+            self.sidebar.set_active_tab(tab)
             tab.terminal.grab_focus()
 
     def _on_new_tab(self, _sb, group: Group) -> None:
@@ -126,10 +127,11 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.terminal_stack.add_child(terminal)
         group.add_tab(tab)
         self._current_group = group
-        self.sidebar.refresh()
         if focus:
             self.terminal_stack.set_visible_child(terminal)
+            self.sidebar.set_active_tab(tab)
             terminal.grab_focus()
+        self.sidebar.refresh()
         return tab
 
     def _wire_terminal(self, tab: Tab, terminal: JFTermTerminal) -> None:
@@ -188,6 +190,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             self._current_group = group
             promoted = group.tabs[new_idx]
             self.terminal_stack.set_visible_child(promoted.terminal)
+            self.sidebar.set_active_tab(promoted)
             if promoted.terminal is not None:
                 promoted.terminal.grab_focus()
         else:
@@ -454,6 +457,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         if nxt.terminal is not None:
             self._current_group = self.ws._find_group(nxt)
             self.terminal_stack.set_visible_child(nxt.terminal)
+            self.sidebar.set_active_tab(nxt)
             nxt.terminal.grab_focus()
 
     def _on_paned_position_changed(self, _paned, _pspec) -> None:
@@ -478,3 +482,4 @@ class JFTermWindow(Adw.ApplicationWindow):
             self._group_empty_label.set_text("Unsorted has no tabs.")
         self._current_group = group
         self.terminal_stack.set_visible_child_name("__empty_group__")
+        self.sidebar.set_active_tab(None)

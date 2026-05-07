@@ -41,15 +41,44 @@ class Sidebar(Gtk.ScrolledWindow):
         "tab-dropped": (GObject.SignalFlags.RUN_FIRST, None, (object, object, int)),
     }
 
+    _css_installed = False
+
     def __init__(self, ws: Workspace) -> None:
         super().__init__()
         self.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.set_min_content_width(200)
         self._ws = ws
+        self._active_tab: Tab | None = None
+
+        self._install_css()
 
         self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._box.add_css_class("navigation-sidebar")
         self.set_child(self._box)
+        self.refresh()
+
+    @classmethod
+    def _install_css(cls) -> None:
+        if cls._css_installed:
+            return
+        provider = Gtk.CssProvider()
+        provider.load_from_data(
+            b".jfterm-active-tab { "
+            b"background-color: alpha(@accent_bg_color, 0.25); "
+            b"border-radius: 6px; "
+            b"}"
+        )
+        display = Gdk.Display.get_default()
+        if display is not None:
+            Gtk.StyleContext.add_provider_for_display(
+                display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
+        cls._css_installed = True
+
+    def set_active_tab(self, tab: Tab | None) -> None:
+        if self._active_tab is tab:
+            return
+        self._active_tab = tab
         self.refresh()
 
     # --- public API ---
@@ -236,6 +265,8 @@ class Sidebar(Gtk.ScrolledWindow):
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         row.set_margin_start(20)
         row.set_margin_end(4)
+        if tab is self._active_tab:
+            row.add_css_class("jfterm-active-tab")
 
         dot = StatusDot()
         dot.set_valign(Gtk.Align.CENTER)
