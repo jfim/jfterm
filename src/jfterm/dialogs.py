@@ -491,3 +491,4 @@ def show_new_web_tab_dialog(
 
     dialog.connect("response", _on_response)
     dialog.present(parent)
+    entry.grab_focus_without_selecting()
