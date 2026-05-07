@@ -84,6 +84,42 @@ class WebTab(Tab):
         return self.web_view
 
 
+@dataclass
+class LinkedTab(Tab):
+    """A `linked:` flash tab: a single tab containing both a terminal (a
+    JFTermTerminal driving a shell) and a webview (a JFTermWebView)
+    arranged vertically in a Gtk.Paned. The tab's lifetime is tied to
+    the shell, exactly like TerminalTab — the wrap_flash_command wrapper
+    causes the shell to exit on success, and on non-zero exit the
+    webview pane is collapsed so the terminal output fills the tab.
+    """
+
+    # Runtime widgets (populated when the tab is materialised):
+    terminal: Any = None
+    web_view: Any = None
+    paned: Any = None
+
+    # Mirrors of TerminalTab's lifecycle fields — populated/updated by
+    # the same handlers, so existing dot/progress/title plumbing works.
+    shell_pid: int | None = None
+    pty_fd: int | None = None
+    current_cwd: str | None = None
+    is_running: bool = False
+    osc133_seen: bool = False
+    launched_command: str | None = None
+    flash_name: str | None = None
+    is_restarting: bool = False
+
+    # The URL we are showing (or about to show, in `auto` mode after
+    # the scanner picks one up). None means we are still waiting in
+    # auto-detect mode.
+    linked_url: str | None = None
+
+    @property
+    def widget(self) -> Any:
+        return self.paned
+
+
 class Group:
     """Either a Project or the Unsorted singleton. Owns an ordered tab list."""
 

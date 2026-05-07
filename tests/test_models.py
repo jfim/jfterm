@@ -234,3 +234,32 @@ def test_move_project_rejects_out_of_range_position():
         ws.move_project(a, 5)
     with pytest.raises(ValueError):
         ws.move_project(a, -1)
+
+
+def test_linked_tab_defaults():
+    from jfterm.models import LinkedTab
+
+    t = LinkedTab()
+    assert t.terminal is None
+    assert t.web_view is None
+    assert t.paned is None
+    assert t.shell_pid is None
+    assert t.pty_fd is None
+    assert t.current_cwd is None
+    assert t.is_running is False
+    assert t.osc133_seen is False
+    assert t.launched_command is None
+    assert t.flash_name is None
+    assert t.is_restarting is False
+    assert t.linked_url is None
+    # Inherits id and title from Tab
+    assert t.title == ""
+    assert isinstance(t.id, str) and len(t.id) > 0
+
+
+def test_linked_tab_widget_returns_paned():
+    from jfterm.models import LinkedTab
+
+    sentinel = object()
+    t = LinkedTab(paned=sentinel)
+    assert t.widget is sentinel
