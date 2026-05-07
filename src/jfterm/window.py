@@ -84,6 +84,8 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.sidebar.connect("toggle-expanded-requested", self._on_toggle_expanded)
         self.sidebar.connect("dot-clicked", self._on_dot_clicked)
         self.sidebar.connect("tab-dropped", self._on_tab_dropped)
+        self.sidebar.connect("unarchive-project-requested", self._on_unarchive_project)
+        self.sidebar.connect("toggle-archived-expanded-requested", self._on_toggle_archived_expanded)
 
         # Keyboard shortcuts
         from jfterm.shortcuts import install as install_shortcuts
@@ -306,6 +308,9 @@ class JFTermWindow(Adw.ApplicationWindow):
         def _disband() -> None:
             self._delete_project(project)
 
+        def _archive() -> None:
+            self._archive_project(project)
+
         show_project_dialog(
             self,
             title=f"Configure {project.name}",
@@ -316,11 +321,33 @@ class JFTermWindow(Adw.ApplicationWindow):
             initial_flash_commands=project.flash_commands,
             on_save=_save,
             on_disband=_disband,
+            on_archive=_archive,
+            n_open_tabs=len(project.tabs),
         )
 
     def _on_archive_project(self, _sb, project: Project) -> None:
-        # TODO: archive support is being implemented separately.
-        pass
+        n = len(project.tabs)
+        if n <= 0:
+            self._archive_project(project)
+            return
+        confirm = Adw.MessageDialog(
+            transient_for=self,
+            modal=True,
+            heading=f"Archive {project.name}?",
+            body=f"This will close {n} tab{'s' if n != 1 else ''}.",
+        )
+        confirm.add_response("cancel", "Cancel")
+        confirm.add_response("archive", "Archive")
+        confirm.set_response_appearance("archive", Adw.ResponseAppearance.DESTRUCTIVE)
+        confirm.set_default_response("cancel")
+        confirm.set_close_response("cancel")
+
+        def _on_response(_d, response):
+            if response == "archive":
+                self._archive_project(project)
+
+        confirm.connect("response", _on_response)
+        confirm.present()
 
     def _on_delete_project(self, _sb, project: Project) -> None:
         self._delete_project(project)
@@ -329,6 +356,30 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.ws.disband(project)
         if self._current_group is project:
             self._current_group = self.ws.unsorted
+        save_projects(self.ws, default_path())
+        self.sidebar.refresh()
+
+    def _archive_project(self, project: Project) -> None:
+        # Close every tab via the standard close path so child processes
+        # terminate cleanly. Iterate over a copy because _on_close_tab
+        # mutates project.tabs.
+        for tab in list(project.tabs):
+            self._on_close_tab(self.sidebar, tab)
+        project.archived = True
+        if self._current_group is project:
+            self._current_group = self.ws.unsorted
+            self.terminal_stack.set_visible_child_name("__empty_global__")
+            self.sidebar.set_active_tab(None)
+        save_projects(self.ws, default_path())
+        self.sidebar.refresh()
+
+    def _on_unarchive_project(self, _sb, project: Project) -> None:
+        project.archived = False
+        save_projects(self.ws, default_path())
+        self.sidebar.refresh()
+
+    def _on_toggle_archived_expanded(self, _sb) -> None:
+        self.ws.archived_expanded = not self.ws.archived_expanded
         save_projects(self.ws, default_path())
         self.sidebar.refresh()
 
