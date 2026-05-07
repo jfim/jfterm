@@ -469,6 +469,13 @@ class JFTermWindow(Adw.ApplicationWindow):
         )
         # Capture next-tab-in-group BEFORE removing.
         idx = group.tabs.index(tab)
+        # Eagerly send SIGHUP via the proxy so port-bound processes
+        # release their sockets before the user re-spawns. Otherwise
+        # cleanup runs only when Python GC + GTK dispose execute, which
+        # can be many seconds after the tab visually disappears.
+        terminal = getattr(tab, "terminal", None)
+        if terminal is not None and terminal._proxy is not None:
+            terminal._proxy.close()
         group.remove_tab(tab)
         if tab.widget is not None:
             self.terminal_stack.remove(tab.widget)
