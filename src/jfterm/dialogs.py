@@ -502,6 +502,14 @@ def show_new_web_tab_dialog(
 
     entry.connect("activate", _on_activate)
     dialog.present(parent)
+    def _deselect(_e: Gtk.Entry, _p: GObject.ParamSpec) -> None:
+        if entry.get_selection_bounds():
+            entry.select_region(-1, -1)
+            entry.set_position(-1)
+
+    entry.connect("notify::has-focus", _deselect)
+    entry.connect("notify::cursor-position", _deselect)
+
     def _focus_at_end() -> bool:
         entry.grab_focus_without_selecting()
         entry.set_position(-1)
