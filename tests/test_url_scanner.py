@@ -61,3 +61,39 @@ def test_scanner_idempotent_after_match():
     # Subsequent feeds do not change the first match.
     s.feed(b"http://b.test/2\n")
     assert s.first_url() == "http://a.test/1"
+
+
+def test_scanner_rewrites_0_0_0_0_to_loopback():
+    s = UrlScanner()
+    s.feed(b"Serving HTTP on 0.0.0.0 port 8765 (http://0.0.0.0:8765/)\n")
+    assert s.first_url() == "http://127.0.0.1:8765/"
+
+
+def test_scanner_rewrites_ipv6_unspecified_to_loopback():
+    s = UrlScanner()
+    s.feed(b"Listening on http://[::]:8080/app\n")
+    assert s.first_url() == "http://[::1]:8080/app"
+
+
+def test_scanner_does_not_rewrite_loopback_or_named_hosts():
+    s = UrlScanner()
+    s.feed(b"open http://localhost:5173/\n")
+    assert s.first_url() == "http://localhost:5173/"
+
+
+def test_scanner_does_not_rewrite_explicit_non_unspecified_ip():
+    s = UrlScanner()
+    s.feed(b"open http://192.168.1.5:8080/\n")
+    assert s.first_url() == "http://192.168.1.5:8080/"
+
+
+def test_scanner_does_not_rewrite_0_0_0_0_in_path_or_query():
+    s = UrlScanner()
+    s.feed(b"open http://example.test/?from=0.0.0.0 done\n")
+    assert s.first_url() == "http://example.test/?from=0.0.0.0"
+
+
+def test_scanner_preserves_userinfo_and_port_when_rewriting():
+    s = UrlScanner()
+    s.feed(b"open http://user:pw@0.0.0.0:9000/x done\n")
+    assert s.first_url() == "http://user:pw@127.0.0.1:9000/x"
