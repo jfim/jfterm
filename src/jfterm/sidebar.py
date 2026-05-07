@@ -41,6 +41,8 @@ class Sidebar(Gtk.ScrolledWindow):
         "toggle-expanded-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "dot-clicked": (GObject.SignalFlags.RUN_FIRST, None, (object, object, object)),
         "tab-dropped": (GObject.SignalFlags.RUN_FIRST, None, (object, object, int)),
+        "unarchive-project-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
+        "toggle-archived-expanded-requested": (GObject.SignalFlags.RUN_FIRST, None, ()),
     }
 
     _css_installed = False
@@ -97,7 +99,8 @@ class Sidebar(Gtk.ScrolledWindow):
         new_proj_btn.connect("clicked", lambda _b: self.emit("new-project-requested"))
         self._box.append(new_proj_btn)
 
-        for idx, project in enumerate(self._ws.projects):
+        active = self._ws.active_projects
+        for idx, project in enumerate(active):
             if idx > 0:
                 self._add_separator()
             self._add_project_row(project)
@@ -106,13 +109,21 @@ class Sidebar(Gtk.ScrolledWindow):
                     self._add_tab_row(project, tab)
                 self._add_drop_sentinel(project)
 
-        if self._ws.projects:
+        if active:
             self._add_separator()
         self._add_unsorted_row(self._ws.unsorted)
         if self._ws.unsorted.expanded:
             for tab in self._ws.unsorted.tabs:
                 self._add_tab_row(self._ws.unsorted, tab)
             self._add_drop_sentinel(self._ws.unsorted)
+
+        archived = self._ws.archived_projects
+        if archived:
+            self._add_separator()
+            self._add_archived_header()
+            if self._ws.archived_expanded:
+                for project in archived:
+                    self._add_archived_row(project)
 
     # --- DnD helpers ---
 
@@ -316,6 +327,57 @@ class Sidebar(Gtk.ScrolledWindow):
 
         for w in (chevron, label_btn, plus):
             row.append(w)
+        self._box.append(row)
+
+    def _add_archived_header(self) -> None:
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        row.set_margin_start(4)
+        row.set_margin_end(4)
+
+        chevron = Gtk.Button.new_from_icon_name(
+            "pan-down-symbolic" if self._ws.archived_expanded else "pan-end-symbolic"
+        )
+        chevron.add_css_class("flat")
+        chevron.connect(
+            "clicked",
+            lambda _b: self.emit("toggle-archived-expanded-requested"),
+        )
+
+        label_btn = Gtk.Button(label="Archived")
+        label_btn.add_css_class("flat")
+        label_btn.set_hexpand(True)
+        label_btn.set_halign(Gtk.Align.START)
+        label_btn.connect(
+            "clicked",
+            lambda _b: self.emit("toggle-archived-expanded-requested"),
+        )
+
+        for w in (chevron, label_btn):
+            row.append(w)
+        self._box.append(row)
+
+    def _add_archived_row(self, project: Project) -> None:
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        row.set_margin_start(20)
+        row.set_margin_end(4)
+
+        from gi.repository import Pango
+
+        name_label = Gtk.Label(label=project.name, xalign=0)
+        name_label.set_ellipsize(Pango.EllipsizeMode.END)
+        name_label.set_max_width_chars(24)
+        name_label.set_hexpand(True)
+
+        unarchive = Gtk.Button.new_from_icon_name("view-restore-symbolic")
+        unarchive.add_css_class("flat")
+        unarchive.set_tooltip_text("Unarchive project")
+        unarchive.connect(
+            "clicked",
+            lambda _b, p=project: self.emit("unarchive-project-requested", p),
+        )
+
+        row.append(name_label)
+        row.append(unarchive)
         self._box.append(row)
 
     def _add_tab_row(self, group: Group, tab: Tab) -> None:
