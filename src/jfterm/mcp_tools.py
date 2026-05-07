@@ -42,3 +42,12 @@ class SpawnTabInput(BaseModel):
 async def spawn_tab(controller: MCPController, params: SpawnTabInput) -> dict:
     tab = controller.spawn_tab(params.project_name, params.command)
     return {"tab": asdict(tab)}
+
+
+class RestartTabInput(BaseModel):
+    id: str
+
+
+async def restart_tab(controller: MCPController, params: RestartTabInput) -> dict:
+    tab = controller.restart_tab(params.id)
+    return {"tab": asdict(tab)}
