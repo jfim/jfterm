@@ -24,35 +24,26 @@ one-click access to each project's setup.
 
 ## Running
 
-Requires Python 3.12+ and `uv`, plus the GTK 4 / libadwaita / VTE 3.91 system
-libraries. On Ubuntu 24.04:
+System libraries (Ubuntu 24.04 — adjust package names for other distros):
 
     sudo apt install \
         gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-vte-3.91 \
         libvte-2.91-gtk4-0 \
         python3-gi python3-cairo
 
-The project relies on the apt-installed PyGObject + VTE bindings (building
-`pygobject` from source needs `libgirepository-2.0-dev` and is slow). The
-venv must be created with `--system-site-packages` so it can import the
-system `gi`. **Run this once before the first `uv run`** — a plain `uv sync`
-auto-creates a venv *without* that flag, which then fails with
-`ModuleNotFoundError: No module named 'gi'`:
+Then either install it as a desktop application (recommended — adds an
+application-menu launcher that pins cleanly to the dock):
 
-    uv venv --system-site-packages --python /usr/bin/python3
-    uv sync
+    just install
 
-Then:
+…or just launch from a source checkout:
 
-    uv run python -m jfterm
+    just run
 
-If you delete `.venv`, repeat the `uv venv …` step before `uv sync`.
-
-For the prompt-running indicator (blue dot) to be most accurate, configure your
-shell to emit OSC 7 (cwd) and OSC 133 (prompt/command markers). The design doc
-has a bash snippet that does this. Without OSC 133 the indicator falls back to
-polling `tcgetpgrp` every 250 ms, which still works but with slightly higher
-latency.
+`just install` puts a launcher shim at `~/.local/bin/jfterm`, a `.desktop`
+file under `~/.local/share/applications/`, the icon under
+`~/.local/share/icons/hicolor/scalable/apps/`, and an isolated venv at
+`~/.local/share/jfterm/venv`. `just uninstall` reverses everything.
 
 ## Status dot
 
@@ -65,6 +56,43 @@ Each tab row has a status dot with two visual axes:
 **Fill — in-place state** (*filled = tab is in the right home; outline = the tab could be moved*; clicking the dot opens a "Move To" menu):
 - Tab in a **project:** filled if the cwd is inside the project's directory, outline otherwise.
 - Tab in **Unsorted:** filled if the cwd matches no project, outline if it's inside some project's directory.
+
+## Shell integration (OSC 7 + OSC 133)
+
+JFTerm tracks each tab's cwd and "is a command running?" state from your
+shell's escape sequences:
+
+- **OSC 7** — current working directory. Drives the status-dot fill state
+  and the deepest-match logic in the dot-click "Move to" menu.
+- **OSC 133** — prompt and command boundaries. Drives the running-state
+  color of the dot (blue while a command runs, grey at the prompt).
+
+Without OSC 133, the dot falls back to polling `tcgetpgrp` every 250 ms,
+which still works but with slightly higher latency. Without OSC 7, the
+fill state stays out of sync with `cd`.
+
+Add this to your `~/.bashrc` (or `~/.bash_profile`) to emit both:
+
+    # JFTerm shell integration: OSC 7 (cwd) and OSC 133 (prompt/command markers).
+    __jfterm_osc() {
+        local exit_status=$?
+        # OSC 133;D — previous command finished, with its exit status.
+        printf '\033]133;D;%s\033\\' "$exit_status"
+        # OSC 7 — current working directory as a file:// URI.
+        printf '\033]7;file://%s%s\033\\' "$HOSTNAME" "$PWD"
+    }
+    PROMPT_COMMAND="__jfterm_osc${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+    # OSC 133;A at prompt start, ;B at prompt end. \[ \] keep line-wrapping correct.
+    PS1='\[\e]133;A\e\\\]'"$PS1"'\[\e]133;B\e\\\]'
+    # OSC 133;C — emitted after Enter, just before the command runs.
+    PS0='\e]133;C\e\\'
+
+Open a new terminal tab after editing, or `source ~/.bashrc`.
+
+Zsh and fish ship their own equivalents (zsh: `precmd`/`preexec` hooks,
+fish: `fish_prompt`/`fish_preexec`); the same four markers (`A` prompt
+start, `B` prompt end, `C` command start, `D` command end with exit code)
+plus OSC 7 are what JFTerm consumes.
 
 ## Development
 
@@ -82,6 +110,17 @@ recipes — run `just` with no args to list them. The most useful ones:
 If you don't want to install `just`, the recipes are thin wrappers around
 `uv run …` and can be invoked directly (e.g. `uv run pytest`,
 `uv run ruff check .`).
+
+Anything that runs through `uv run` needs the venv to inherit system
+site-packages so it can import `gi` — building `pygobject` from source
+needs `libgirepository-2.0-dev` and is slow. **Run this once before the
+first `uv run`** — a plain `uv sync` auto-creates a venv *without* that
+flag, which then fails with `ModuleNotFoundError: No module named 'gi'`:
+
+    uv venv --system-site-packages --python /usr/bin/python3
+    uv sync
+
+If you delete `.venv`, repeat the `uv venv …` step before `uv sync`.
 
 Pure-logic modules (models, persistence, matching) are covered by tests.
 GUI behavior is verified manually.
