@@ -349,6 +349,7 @@ class Sidebar(Gtk.ScrolledWindow):
         )
         row.add_controller(gesture)
 
+        self._attach_drop(row, project, lambda p=project: len(p.tabs))
         self._attach_project_drag(row, project)
         self._attach_project_drop(row, lambda i=active_index: i)
 
