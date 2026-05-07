@@ -31,6 +31,7 @@ class Sidebar(Gtk.ScrolledWindow):
         "tab-activated": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "new-tab-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "close-tab-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
+        "restart-tab-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "configure-project-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "launch-project-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "new-project-requested": (GObject.SignalFlags.RUN_FIRST, None, ()),
@@ -228,6 +229,16 @@ class Sidebar(Gtk.ScrolledWindow):
         title.set_child(title_label)
         title.connect("clicked", lambda _b, t=tab: self.emit("tab-activated", t))
 
+        restart: Gtk.Button | None = None
+        if tab.launched_command:
+            restart = Gtk.Button.new_from_icon_name("view-refresh-symbolic")
+            restart.add_css_class("flat")
+            restart.set_tooltip_text("Restart command")
+            restart.connect(
+                "clicked",
+                lambda _b, t=tab: self.emit("restart-tab-requested", t),
+            )
+
         close = Gtk.Button.new_from_icon_name("window-close-symbolic")
         close.add_css_class("flat")
         close.connect("clicked", lambda _b, t=tab: self.emit("close-tab-requested", t))
@@ -238,6 +249,10 @@ class Sidebar(Gtk.ScrolledWindow):
         self._attach_drag(row, tab)
         self._attach_drop(row, group, lambda pos=position_in_group: pos)
 
-        for w in (dot, title, close):
+        widgets: list[Gtk.Widget] = [dot, title]
+        if restart is not None:
+            widgets.append(restart)
+        widgets.append(close)
+        for w in widgets:
             row.append(w)
         self._box.append(row)
