@@ -321,7 +321,9 @@ class JFTermWindow(Adw.ApplicationWindow):
                     self._spawn_tab(project, focus=True)
                 return False  # remove timeout
             sc = cmds[idx]
-            self._spawn_tab(project, command=sc.command, focus=(idx == 0))
+            is_last = idx == len(cmds) - 1
+            focus = sc.delay > 0 or (is_last and not spawn_blank)
+            self._spawn_tab(project, command=sc.command, focus=focus)
             if idx + 1 < len(cmds) or spawn_blank:
                 if sc.delay > 0:
                     GLib.timeout_add_seconds(sc.delay, _step, idx + 1)
