@@ -124,6 +124,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.sidebar.connect("toggle-expanded-requested", self._on_toggle_expanded)
         self.sidebar.connect("dot-clicked", self._on_dot_clicked)
         self.sidebar.connect("tab-dropped", self._on_tab_dropped)
+        self.sidebar.connect("project-dropped", self._on_project_dropped)
         self.sidebar.connect("unarchive-project-requested", self._on_unarchive_project)
         self.sidebar.connect(
             "toggle-archived-expanded-requested", self._on_toggle_archived_expanded
@@ -651,6 +652,16 @@ class JFTermWindow(Adw.ApplicationWindow):
             self._current_group = dest_group
         if isinstance(tab, TerminalTab):
             self._refresh_tab_dot(tab)
+        self.sidebar.refresh()
+
+    def _on_project_dropped(self, _sb, project, position: int) -> None:
+        active = self.ws.active_projects
+        src_idx = active.index(project)
+        adjusted = position
+        if src_idx < position:
+            adjusted -= 1
+        self.ws.move_project(project, adjusted)
+        save_projects(self.ws, default_path())
         self.sidebar.refresh()
 
     def _on_tab_cwd_changed(self, tab: TerminalTab, path: str) -> None:

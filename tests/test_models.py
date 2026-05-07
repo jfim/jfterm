@@ -171,8 +171,8 @@ def test_base_tab_widget_raises():
 
 def test_move_project_reorders_active_projects():
     ws = Workspace()
-    a = ws.add_project(name="A", directory="/tmp/a")
-    b = ws.add_project(name="B", directory="/tmp/b")
+    ws.add_project(name="A", directory="/tmp/a")
+    ws.add_project(name="B", directory="/tmp/b")
     c = ws.add_project(name="C", directory="/tmp/c")
 
     ws.move_project(c, 0)
@@ -182,10 +182,10 @@ def test_move_project_reorders_active_projects():
 
 def test_move_project_preserves_archived_positions():
     ws = Workspace()
-    a = ws.add_project(name="A", directory="/tmp/a")
+    ws.add_project(name="A", directory="/tmp/a")
     z = ws.add_project(name="Z", directory="/tmp/z")
     z.archived = True
-    b = ws.add_project(name="B", directory="/tmp/b")
+    ws.add_project(name="B", directory="/tmp/b")
     c = ws.add_project(name="C", directory="/tmp/c")
 
     ws.move_project(c, 0)
@@ -198,8 +198,8 @@ def test_move_project_preserves_archived_positions():
 def test_move_project_to_end_appends():
     ws = Workspace()
     a = ws.add_project(name="A", directory="/tmp/a")
-    b = ws.add_project(name="B", directory="/tmp/b")
-    c = ws.add_project(name="C", directory="/tmp/c")
+    ws.add_project(name="B", directory="/tmp/b")
+    ws.add_project(name="C", directory="/tmp/c")
 
     ws.move_project(a, 2)
 
@@ -209,7 +209,7 @@ def test_move_project_to_end_appends():
 def test_move_project_to_same_position_is_noop():
     ws = Workspace()
     a = ws.add_project(name="A", directory="/tmp/a")
-    b = ws.add_project(name="B", directory="/tmp/b")
+    ws.add_project(name="B", directory="/tmp/b")
 
     ws.move_project(a, 0)
 
@@ -228,7 +228,7 @@ def test_move_project_rejects_archived_project():
 def test_move_project_rejects_out_of_range_position():
     ws = Workspace()
     a = ws.add_project(name="A", directory="/tmp/a")
-    b = ws.add_project(name="B", directory="/tmp/b")
+    ws.add_project(name="B", directory="/tmp/b")
 
     with pytest.raises(ValueError):
         ws.move_project(a, 5)
