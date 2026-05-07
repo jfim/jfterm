@@ -54,7 +54,7 @@ icon_dir      := `echo "$HOME/.local/share/icons/hicolor/scalable/apps"`
 # Install jfterm as a desktop application (user-local).
 install:
     uv venv --system-site-packages --python 3.12 "{{install_dir}}/venv"
-    uv pip install --python "{{install_dir}}/venv/bin/python" .
+    uv pip install --reinstall --python "{{install_dir}}/venv/bin/python" .
     install -Dm755 packaging/jfterm.sh "{{bin_dir}}/jfterm"
     install -Dm644 data/dev.jfim.jfterm.desktop "{{apps_dir}}/dev.jfim.jfterm.desktop"
     install -Dm644 data/icons/dev.jfim.jfterm.svg "{{icon_dir}}/dev.jfim.jfterm.svg"
