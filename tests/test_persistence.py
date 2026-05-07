@@ -103,3 +103,49 @@ def test_load_missing_flash_commands_defaults_to_empty(tmp_path: Path):
     ws = Workspace()
     load_projects(ws, path)
     assert ws.projects[0].flash_commands == []
+
+
+def test_archived_flag_roundtrips(tmp_path: Path):
+    ws = Workspace()
+    a = ws.add_project(name="A", directory="/tmp/a")
+    b = ws.add_project(name="B", directory="/tmp/b")
+    b.archived = True
+
+    path = tmp_path / "projects.json"
+    save_projects(ws, path)
+    ws2 = Workspace()
+    load_projects(ws2, path)
+
+    assert [(p.name, p.archived) for p in ws2.projects] == [
+        ("A", False),
+        ("B", True),
+    ]
+    assert [p.id for p in ws2.projects] == [a.id, b.id]
+
+
+def test_archived_expanded_roundtrips(tmp_path: Path):
+    ws = Workspace()
+    ws.archived_expanded = True
+    path = tmp_path / "projects.json"
+    save_projects(ws, path)
+    ws2 = Workspace()
+    load_projects(ws2, path)
+    assert ws2.archived_expanded is True
+
+
+def test_load_missing_archived_field_defaults_to_false(tmp_path: Path):
+    path = tmp_path / "projects.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "projects": [
+                    {"id": "x", "name": "A", "directory": "/tmp/a", "expanded": True}
+                ],
+            }
+        )
+    )
+    ws = Workspace()
+    load_projects(ws, path)
+    assert ws.projects[0].archived is False
+    assert ws.archived_expanded is False
