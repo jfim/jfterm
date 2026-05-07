@@ -1207,7 +1207,11 @@ class JFTermWindow(Adw.ApplicationWindow):
         # `$(cat ...)` keeps the literal token out of shell history; the
         # token still ends up in claude's argv during the registration
         # call, which is acceptable for a same-UID dev tool.
+        # `remove` first so re-running this after a token rotation replaces
+        # the stale registration; `;` (not `&&`) keeps `add` running when
+        # there's no existing entry to remove.
         command = (
+            "claude mcp remove --scope user jfterm; "
             f"claude mcp add --scope user --transport http jfterm "
             f"http://{host}:{port}/mcp "
             f'--header "Authorization: Bearer $(cat {shlex.quote(token_path)})"'
