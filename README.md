@@ -120,6 +120,7 @@ Tools available in this MVP:
 - `list_projects_tool` — projects with name, directory, and tab count.
 - `list_tabs_tool(project_name?)` — all tabs, or filtered to one project.
 - `spawn_tab_tool(project_name, command)` — spawn a tab running `command`.
+- `spawn_web_tab_tool(project_name, url)` — spawn a web tab pointing at `url`.
 - `restart_tab_tool(id)` — restart a tab spawned with a startup command.
 - `focus_tab_tool(id)` — switch to a tab and bring its input to the foreground.
 

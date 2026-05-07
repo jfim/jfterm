@@ -11,14 +11,17 @@ from jfterm.mcp_tools import (
     ListTabsInput,
     RestartTabInput,
     SpawnTabInput,
+    SpawnWebTabInput,
     focus_tab,
     list_projects,
     list_tabs,
     restart_tab,
     spawn_tab,
+    spawn_web_tab,
 )
 from jfterm.mcp_types import (
     EmptyCommand,
+    EmptyUrl,
     ProjectNotFound,
     TabHasNoCommand,
     TabNotFound,
@@ -95,6 +98,30 @@ async def test_spawn_tab_unknown_project_raises():
     ctrl = FakeController()
     with pytest.raises(ProjectNotFound):
         await spawn_tab(ctrl, SpawnTabInput(project_name="nope", command="ls"))
+
+
+async def test_spawn_web_tab_returns_new_tab_and_records():
+    ctrl = FakeController()
+    ctrl.add_project("alpha", "/a")
+    result = await spawn_web_tab(
+        ctrl, SpawnWebTabInput(project_name="alpha", url="http://localhost:4000/")
+    )
+    assert result["tab"]["title"] == "http://localhost:4000/"
+    assert result["tab"]["project"] == "alpha"
+    assert ctrl.web_spawn_log == [("alpha", "http://localhost:4000/")]
+
+
+async def test_spawn_web_tab_empty_url_raises():
+    ctrl = FakeController()
+    ctrl.add_project("alpha", "/a")
+    with pytest.raises(EmptyUrl):
+        await spawn_web_tab(ctrl, SpawnWebTabInput(project_name="alpha", url=""))
+
+
+async def test_spawn_web_tab_unknown_project_raises():
+    ctrl = FakeController()
+    with pytest.raises(ProjectNotFound):
+        await spawn_web_tab(ctrl, SpawnWebTabInput(project_name="nope", url="http://localhost/"))
 
 
 async def test_restart_tab_records_and_returns_tab():

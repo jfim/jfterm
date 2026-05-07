@@ -11,6 +11,7 @@ from dataclasses import replace
 
 from jfterm.mcp_types import (
     EmptyCommand,
+    EmptyUrl,
     MCPController,
     ProjectInfo,
     ProjectNotFound,
@@ -27,6 +28,7 @@ class FakeController(MCPController):
         }
         self.tabs: list[TabInfo] = []
         self.spawn_log: list[tuple[str, str]] = []
+        self.web_spawn_log: list[tuple[str, str]] = []
         self.restart_log: list[str] = []
         self.focus_log: list[str] = []
 
@@ -76,6 +78,14 @@ class FakeController(MCPController):
             raise ProjectNotFound(project_name)
         self.spawn_log.append((project_name, command))
         return self.add_tab(project_name, command, launched_command=command)
+
+    def spawn_web_tab(self, project_name: str, url: str) -> TabInfo:
+        if not url:
+            raise EmptyUrl()
+        if project_name not in self.projects:
+            raise ProjectNotFound(project_name)
+        self.web_spawn_log.append((project_name, url))
+        return self.add_tab(project_name, url)
 
     def restart_tab(self, tab_id: str) -> TabInfo:
         for tab in self.tabs:

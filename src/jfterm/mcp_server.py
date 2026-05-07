@@ -17,11 +17,13 @@ from jfterm.mcp_tools import (
     ListTabsInput,
     RestartTabInput,
     SpawnTabInput,
+    SpawnWebTabInput,
     focus_tab,
     list_projects,
     list_tabs,
     restart_tab,
     spawn_tab,
+    spawn_web_tab,
 )
 from jfterm.mcp_types import MCPController, MCPError
 
@@ -56,6 +58,16 @@ def build_server(controller: MCPController) -> FastMCP:
         try:
             return await spawn_tab(
                 controller, SpawnTabInput(project_name=project_name, command=command)
+            )
+        except MCPError as e:
+            return {"error": type(e).__name__, "message": str(e)}
+
+    @mcp.tool()
+    async def spawn_web_tab_tool(project_name: str, url: str) -> dict:
+        """Spawn a new web tab pointing at `url` in `project_name`."""
+        try:
+            return await spawn_web_tab(
+                controller, SpawnWebTabInput(project_name=project_name, url=url)
             )
         except MCPError as e:
             return {"error": type(e).__name__, "message": str(e)}
