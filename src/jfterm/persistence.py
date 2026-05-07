@@ -9,6 +9,7 @@ _KNOWN_FIELDS = {
     "name",
     "directory",
     "expanded",
+    "archived",
     "startup_commands",
     "spawn_blank_after_startup",
     "flash_commands",
@@ -57,6 +58,7 @@ def load_projects(ws: Workspace, path: Path) -> None:
             name=entry["name"],
             directory=entry["directory"],
             expanded=entry.get("expanded", True),
+            archived=bool(entry.get("archived", False)),
             startup_commands=_load_commands(entry.get("startup_commands", [])),
             spawn_blank_after_startup=bool(entry.get("spawn_blank_after_startup", False)),
             flash_commands=_load_flash_commands(entry.get("flash_commands", [])),
@@ -66,6 +68,7 @@ def load_projects(ws: Workspace, path: Path) -> None:
         ws.projects.append(p)
     ws.unsorted.expanded = data.get("unsorted_expanded", True)
     ws.sidebar_width = int(data.get("sidebar_width", ws.sidebar_width))
+    ws.archived_expanded = bool(data.get("archived_expanded", False))
 
 
 def save_projects(ws: Workspace, path: Path) -> None:
@@ -78,6 +81,7 @@ def save_projects(ws: Workspace, path: Path) -> None:
                 "name": p.name,
                 "directory": p.directory,
                 "expanded": p.expanded,
+                "archived": p.archived,
                 "startup_commands": [
                     {"command": c.command, "delay": c.delay} for c in p.startup_commands
                 ],
@@ -96,6 +100,7 @@ def save_projects(ws: Workspace, path: Path) -> None:
             for p in ws.projects
         ],
         "unsorted_expanded": ws.unsorted.expanded,
+        "archived_expanded": ws.archived_expanded,
         "sidebar_width": ws.sidebar_width,
     }
     tmp = path.with_suffix(path.suffix + ".tmp")
