@@ -3,17 +3,24 @@
 from __future__ import annotations
 
 import pytest
+from tests.fakes import FakeController
 
 from jfterm.mcp_tools import (
-    list_projects,
-    list_tabs,
-    spawn_tab,
     ListProjectsInput,
     ListTabsInput,
+    RestartTabInput,
     SpawnTabInput,
+    list_projects,
+    list_tabs,
+    restart_tab,
+    spawn_tab,
 )
-from jfterm.mcp_types import EmptyCommand, ProjectNotFound
-from tests.fakes import FakeController
+from jfterm.mcp_types import (
+    EmptyCommand,
+    ProjectNotFound,
+    TabHasNoCommand,
+    TabNotFound,
+)
 
 
 async def test_list_projects_includes_unsorted():
@@ -88,3 +95,26 @@ async def test_spawn_tab_unknown_project_raises():
     ctrl = FakeController()
     with pytest.raises(ProjectNotFound):
         await spawn_tab(ctrl, SpawnTabInput(project_name="nope", command="ls"))
+
+
+async def test_restart_tab_records_and_returns_tab():
+    ctrl = FakeController()
+    ctrl.add_project("alpha", "/a")
+    spawned = ctrl.add_tab("alpha", "mix phx.server", launched_command="mix phx.server")
+    result = await restart_tab(ctrl, RestartTabInput(id=spawned.id))
+    assert result["tab"]["id"] == spawned.id
+    assert ctrl.restart_log == [spawned.id]
+
+
+async def test_restart_tab_unknown_id_raises():
+    ctrl = FakeController()
+    with pytest.raises(TabNotFound):
+        await restart_tab(ctrl, RestartTabInput(id="bogus"))
+
+
+async def test_restart_tab_without_launched_command_raises():
+    ctrl = FakeController()
+    ctrl.add_project("alpha", "/a")
+    plain = ctrl.add_tab("alpha", "shell", launched_command=None)
+    with pytest.raises(TabHasNoCommand):
+        await restart_tab(ctrl, RestartTabInput(id=plain.id))
