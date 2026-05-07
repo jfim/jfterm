@@ -1,4 +1,4 @@
-from jfterm.models import Tab, Workspace
+from jfterm.models import FlashCommand, Project, Tab, Workspace
 
 
 def test_workspace_starts_empty_with_unsorted_only():
@@ -68,3 +68,22 @@ def test_tab_has_launched_command_and_is_restarting_defaults():
     t = Tab(title="x")
     assert t.launched_command is None
     assert t.is_restarting is False
+
+
+def test_flash_command_defaults():
+    fc = FlashCommand(name="Push", command="git push")
+    assert fc.name == "Push"
+    assert fc.command == "git push"
+    assert fc.keep_open_on_success is False
+    assert fc.focus_on_launch is True
+
+
+def test_project_default_flash_commands_is_empty_list():
+    p = Project(name="A", directory="/tmp/a")
+    assert p.flash_commands == []
+
+
+def test_project_accepts_flash_commands():
+    fc = FlashCommand(name="Push", command="git push", keep_open_on_success=True)
+    p = Project(name="A", directory="/tmp/a", flash_commands=[fc])
+    assert p.flash_commands == [fc]
