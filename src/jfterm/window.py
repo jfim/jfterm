@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import signal
+
 from gi.repository import Adw, Gtk
 
 from jfterm.models import Group, Project, StartupCommand, Tab, Workspace
@@ -57,6 +60,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.sidebar.connect("tab-activated", self._on_tab_activated)
         self.sidebar.connect("new-tab-requested", self._on_new_tab)
         self.sidebar.connect("close-tab-requested", self._on_close_tab)
+        self.sidebar.connect("restart-tab-requested", self._on_restart_tab)
         self.sidebar.connect("new-project-requested", self._on_new_project)
         self.sidebar.connect("configure-project-requested", self._on_configure_project)
         self.sidebar.connect("launch-project-requested", self._on_launch_project)
@@ -168,6 +172,72 @@ class JFTermWindow(Adw.ApplicationWindow):
                 promoted.terminal.grab_focus()
         else:
             self._show_group_empty(group)
+
+    def _on_restart_tab(self, _sb, tab: Tab) -> None:
+        if not tab.launched_command:
+            return
+        from gi.repository import GLib
+
+        group = self.ws._find_group(tab)
+        cwd = group.directory if isinstance(group, Project) else None
+        command = tab.launched_command
+        was_visible = (
+            tab.terminal is not None
+            and self.terminal_stack.get_visible_child() is tab.terminal
+        )
+        old_terminal = tab.terminal
+        old_pid = tab.shell_pid
+
+        # Block the old terminal's child-exited from closing the tab.
+        tab.is_restarting = True
+
+        # SIGTERM now; SIGKILL after grace period if still alive.
+        if old_pid is not None:
+            try:
+                os.kill(old_pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+
+            def _force_kill(pid: int = old_pid) -> bool:
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
+                    return False
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                return False
+
+            GLib.timeout_add(1500, _force_kill)
+
+        # Swap in a fresh terminal for the same tab.
+        if old_terminal is not None:
+            self.terminal_stack.remove(old_terminal)
+
+        new_terminal = JFTermTerminal(cwd=cwd, send_after_spawn=command)
+        new_terminal.set_vexpand(True)
+        new_terminal.set_hexpand(True)
+
+        tab.terminal = new_terminal
+        tab.shell_pid = None
+        tab.pty_fd = None
+        tab.is_running = False
+        tab.osc133_seen = False
+        tab.title = command
+
+        self._wire_terminal(tab, new_terminal)
+        self.terminal_stack.add_child(new_terminal)
+
+        # The flag has done its job — the new terminal's child-exited should
+        # close the tab normally.
+        tab.is_restarting = False
+
+        if was_visible:
+            self.terminal_stack.set_visible_child(new_terminal)
+            new_terminal.grab_focus()
+
+        self.sidebar.refresh()
 
     def _on_new_project(self, _sb) -> None:
         from jfterm.dialogs import show_project_dialog
