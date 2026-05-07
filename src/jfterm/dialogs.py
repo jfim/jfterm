@@ -381,22 +381,36 @@ def show_project_dialog(
     actions.append(cancel_btn)
     actions.append(save_btn)
 
-    for w in (
-        Gtk.Label(label="Name", xalign=0),
-        name_entry,
-        Gtk.Label(label="Directory", xalign=0),
-        dir_row,
-        Gtk.Label(label="Startup commands (one tab per command)", xalign=0),
-        commands_header,
-        commands_box,
-        add_cmd_btn,
-        Gtk.Label(label="Flash commands", xalign=0),
-        flash_header,
-        flash_box,
-        add_flash_btn,
-        spawn_blank_check,
-        actions,
-    ):
+    project_group = Adw.PreferencesGroup()
+    project_inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+    project_inner.append(Gtk.Label(label="Name", xalign=0))
+    project_inner.append(name_entry)
+    project_inner.append(Gtk.Label(label="Directory", xalign=0))
+    project_inner.append(dir_row)
+    project_group.add(project_inner)
+
+    startup_group = Adw.PreferencesGroup(
+        title="Startup commands",
+        description="Run when launching this project — one tab per command.",
+    )
+    startup_inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+    startup_inner.append(commands_header)
+    startup_inner.append(commands_box)
+    startup_inner.append(add_cmd_btn)
+    startup_inner.append(spawn_blank_check)
+    startup_group.add(startup_inner)
+
+    flash_group = Adw.PreferencesGroup(
+        title="Flash commands",
+        description="Quick one-shot commands available from the project's flash menu.",
+    )
+    flash_inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+    flash_inner.append(flash_header)
+    flash_inner.append(flash_box)
+    flash_inner.append(add_flash_btn)
+    flash_group.add(flash_inner)
+
+    for w in (project_group, startup_group, flash_group, actions):
         box.append(w)
 
     dlg.set_content(box)
