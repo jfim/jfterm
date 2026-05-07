@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from gi.repository import Gdk, GObject, Gtk
 
@@ -159,9 +159,7 @@ class Sidebar(Gtk.ScrolledWindow):
         plus = Gtk.Button.new_from_icon_name("list-add-symbolic")
         plus.add_css_class("flat")
         plus.set_tooltip_text("New tab")
-        plus.connect(
-            "clicked", lambda _b, p=project: self.emit("new-tab-requested", p)
-        )
+        plus.connect("clicked", lambda _b, p=project: self.emit("new-tab-requested", p))
 
         for w in (chevron, label_btn, play, cog, plus):
             row.append(w)
@@ -193,9 +191,7 @@ class Sidebar(Gtk.ScrolledWindow):
         plus = Gtk.Button.new_from_icon_name("list-add-symbolic")
         plus.add_css_class("flat")
         plus.set_tooltip_text("New tab")
-        plus.connect(
-            "clicked", lambda _b, g=group: self.emit("new-tab-requested", g)
-        )
+        plus.connect("clicked", lambda _b, g=group: self.emit("new-tab-requested", g))
 
         for w in (chevron, label_btn, plus):
             row.append(w)
@@ -217,9 +213,7 @@ class Sidebar(Gtk.ScrolledWindow):
         tab._dot = dot  # so the runtime layer can update without a full refresh
         dot.connect(
             "clicked",
-            lambda _d, t=tab, g=group, anchor=dot: self.emit(
-                "dot-clicked", t, g, anchor
-            ),
+            lambda _d, t=tab, g=group, anchor=dot: self.emit("dot-clicked", t, g, anchor),
         )
 
         title = Gtk.Button()
@@ -228,6 +222,7 @@ class Sidebar(Gtk.ScrolledWindow):
         title.set_halign(Gtk.Align.START)
         title_label = Gtk.Label(label=tab.title or "tab", xalign=0)
         from gi.repository import Pango
+
         title_label.set_ellipsize(Pango.EllipsizeMode.END)
         title_label.set_max_width_chars(24)
         title.set_child(title_label)
@@ -235,9 +230,7 @@ class Sidebar(Gtk.ScrolledWindow):
 
         close = Gtk.Button.new_from_icon_name("window-close-symbolic")
         close.add_css_class("flat")
-        close.connect(
-            "clicked", lambda _b, t=tab: self.emit("close-tab-requested", t)
-        )
+        close.connect("clicked", lambda _b, t=tab: self.emit("close-tab-requested", t))
 
         # DnD: the row is both a drag source (carrying the tab) and a drop
         # target (drop above this row, taking this row's index).

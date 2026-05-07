@@ -4,7 +4,6 @@ from pathlib import Path
 
 from jfterm.models import Project, StartupCommand, Workspace
 
-
 _KNOWN_FIELDS = {"id", "name", "directory", "expanded", "startup_commands"}
 
 
@@ -54,8 +53,7 @@ def save_projects(ws: Workspace, path: Path) -> None:
                 "directory": p.directory,
                 "expanded": p.expanded,
                 "startup_commands": [
-                    {"command": c.command, "delay": c.delay}
-                    for c in p.startup_commands
+                    {"command": c.command, "delay": c.delay} for c in p.startup_commands
                 ],
                 **getattr(p, "_extra", {}),
             }

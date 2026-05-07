@@ -30,9 +30,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         self._group_empty_label = Gtk.Label()
         self._group_empty_label.set_vexpand(True)
         self._group_empty_label.set_hexpand(True)
-        self.terminal_stack.add_named(
-            self._group_empty_label, "__empty_group__"
-        )
+        self.terminal_stack.add_named(self._group_empty_label, "__empty_group__")
 
         self.terminal_stack.set_visible_child_name("__empty_global__")
         # The "current group" is the group whose context the right pane is
@@ -60,12 +58,8 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.sidebar.connect("new-tab-requested", self._on_new_tab)
         self.sidebar.connect("close-tab-requested", self._on_close_tab)
         self.sidebar.connect("new-project-requested", self._on_new_project)
-        self.sidebar.connect(
-            "configure-project-requested", self._on_configure_project
-        )
-        self.sidebar.connect(
-            "launch-project-requested", self._on_launch_project
-        )
+        self.sidebar.connect("configure-project-requested", self._on_configure_project)
+        self.sidebar.connect("launch-project-requested", self._on_launch_project)
         self.sidebar.connect("toggle-expanded-requested", self._on_toggle_expanded)
         self.sidebar.connect("dot-clicked", self._on_dot_clicked)
         self.sidebar.connect("tab-dropped", self._on_tab_dropped)
@@ -73,12 +67,15 @@ class JFTermWindow(Adw.ApplicationWindow):
         # Keyboard shortcuts
         from jfterm.shortcuts import install as install_shortcuts
 
-        install_shortcuts(self, actions={
-            "win.new-tab": self._shortcut_new_tab,
-            "win.close-tab": self._shortcut_close_tab,
-            "win.next-tab": self._shortcut_next_tab,
-            "win.prev-tab": self._shortcut_prev_tab,
-        })
+        install_shortcuts(
+            self,
+            actions={
+                "win.new-tab": self._shortcut_new_tab,
+                "win.close-tab": self._shortcut_close_tab,
+                "win.next-tab": self._shortcut_next_tab,
+                "win.prev-tab": self._shortcut_prev_tab,
+            },
+        )
         app = self.get_application()
         if app is not None:
             app.set_accels_for_action("win.new-tab", ["<Control><Shift>t"])
@@ -137,8 +134,7 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _on_close_tab(self, _sb, tab: Tab) -> None:
         group = self.ws._find_group(tab)
         was_visible = (
-            tab.terminal is not None
-            and self.terminal_stack.get_visible_child() is tab.terminal
+            tab.terminal is not None and self.terminal_stack.get_visible_child() is tab.terminal
         )
         # Capture next-tab-in-group BEFORE removing.
         idx = group.tabs.index(tab)
@@ -213,7 +209,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             if idx >= len(cmds):
                 return False  # remove timeout
             sc = cmds[idx]
-            tab = self._spawn_tab(project, command=sc.command, focus=(idx == 0))
+            self._spawn_tab(project, command=sc.command, focus=(idx == 0))
             if idx + 1 < len(cmds):
                 if sc.delay > 0:
                     GLib.timeout_add_seconds(sc.delay, _step, idx + 1)
@@ -233,10 +229,7 @@ class JFTermWindow(Adw.ApplicationWindow):
 
         def _move(dest: Group) -> None:
             self.ws.move_tab(tab, dest)
-            if (
-                tab.terminal is not None
-                and self.terminal_stack.get_visible_child() is tab.terminal
-            ):
+            if tab.terminal is not None and self.terminal_stack.get_visible_child() is tab.terminal:
                 self._current_group = dest
             self._refresh_tab_dot(tab)
             self.sidebar.refresh()
@@ -245,9 +238,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         pop.set_parent(anchor)
         pop.popup()
 
-    def _on_tab_dropped(
-        self, _sb, tab: Tab, dest_group: Group, position: int
-    ) -> None:
+    def _on_tab_dropped(self, _sb, tab: Tab, dest_group: Group, position: int) -> None:
         # Within-group + drop below source: removing first shifts indices.
         src_group = self.ws._find_group(tab)
         adjusted = position
@@ -256,10 +247,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             if src_idx < position:
                 adjusted -= 1
         self.ws.move_tab(tab, dest_group, position=adjusted)
-        if (
-            tab.terminal is not None
-            and self.terminal_stack.get_visible_child() is tab.terminal
-        ):
+        if tab.terminal is not None and self.terminal_stack.get_visible_child() is tab.terminal:
             self._current_group = dest_group
         self._refresh_tab_dot(tab)
         self.sidebar.refresh()
@@ -349,9 +337,7 @@ class JFTermWindow(Adw.ApplicationWindow):
 
     def _show_group_empty(self, group: Group) -> None:
         if isinstance(group, Project):
-            self._group_empty_label.set_text(
-                f"Project {group.name} has no tabs."
-            )
+            self._group_empty_label.set_text(f"Project {group.name} has no tabs.")
         else:
             self._group_empty_label.set_text("Unsorted has no tabs.")
         self._current_group = group

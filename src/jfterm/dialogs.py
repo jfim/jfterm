@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from gi.repository import Adw, Gdk, GObject, Gtk
 
@@ -26,9 +26,7 @@ def show_project_dialog(
     on_save: Callable[[str, str, list[StartupCommand]], None],
     on_disband: Callable[[], None] | None = None,
 ) -> None:
-    dlg = Adw.Window(
-        transient_for=parent, modal=True, title=title, default_width=480
-    )
+    dlg = Adw.Window(transient_for=parent, modal=True, title=title, default_width=480)
 
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
     box.set_margin_start(16)
@@ -77,18 +75,12 @@ def show_project_dialog(
     def _move_row(src_row: Gtk.Box, dst_row: Gtk.Box) -> None:
         if src_row is dst_row:
             return
-        src_idx = next(
-            (i for i, t in enumerate(command_rows) if t[0] is src_row), None
-        )
-        dst_idx = next(
-            (i for i, t in enumerate(command_rows) if t[0] is dst_row), None
-        )
+        src_idx = next((i for i, t in enumerate(command_rows) if t[0] is src_row), None)
+        dst_idx = next((i for i, t in enumerate(command_rows) if t[0] is dst_row), None)
         if src_idx is None or dst_idx is None:
             return
         item = command_rows.pop(src_idx)
-        new_dst = next(
-            i for i, t in enumerate(command_rows) if t[0] is dst_row
-        )
+        new_dst = next(i for i, t in enumerate(command_rows) if t[0] is dst_row)
         command_rows.insert(new_dst, item)
         # Sync the GTK box order to match command_rows.
         for r, _, _ in command_rows:
@@ -104,9 +96,7 @@ def show_project_dialog(
         handle.set_tooltip_text("Drag to reorder")
         handle.set_cursor(Gdk.Cursor.new_from_name("grab", None))
 
-        entry = Gtk.Entry(
-            placeholder_text="e.g. docker compose up postgres"
-        )
+        entry = Gtk.Entry(placeholder_text="e.g. docker compose up postgres")
         entry.set_text(initial_text)
         entry.set_hexpand(True)
 

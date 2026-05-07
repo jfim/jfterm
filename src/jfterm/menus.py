@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from gi.repository import Gtk
 
@@ -28,9 +28,11 @@ def build_move_to_popover(
         btn.set_hexpand(True)
         btn.set_sensitive(sensitive)
         if sensitive and dest is not None:
+
             def _cb(_b):
                 pop.popdown()
                 on_move(dest)
+
             btn.connect("clicked", _cb)
         return btn
 
@@ -43,11 +45,13 @@ def build_move_to_popover(
         box.append(_row("No matching projects", sensitive=False, dest=None))
 
     is_unsorted = isinstance(current_group, Unsorted)
-    box.append(_row(
-        "Move to Unsorted",
-        sensitive=not is_unsorted,
-        dest=ws.unsorted,
-    ))
+    box.append(
+        _row(
+            "Move to Unsorted",
+            sensitive=not is_unsorted,
+            dest=ws.unsorted,
+        )
+    )
 
     pop.set_child(box)
     return pop

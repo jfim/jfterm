@@ -9,6 +9,7 @@ from typing import Any
 class StartupCommand:
     """A command to run when launching a project, with a post-spawn delay
     (in seconds) before the next command is spawned."""
+
     command: str
     delay: int = 0
 
@@ -88,9 +89,7 @@ class Workspace:
             self.unsorted.tabs.append(t)
         project.tabs = []
 
-    def move_tab(
-        self, tab: Tab, dest: Group, position: int | None = None
-    ) -> None:
+    def move_tab(self, tab: Tab, dest: Group, position: int | None = None) -> None:
         src = self._find_group(tab)
         src.remove_tab(tab)
         dest.add_tab(tab, position=position)

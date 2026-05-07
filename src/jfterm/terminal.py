@@ -1,3 +1,4 @@
+import contextlib
 import os
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -45,10 +46,8 @@ class JFTermTerminal(Vte.Terminal):
             ("shell-preexec", self._on_shell_preexec),
             ("shell-precmd", self._on_shell_precmd),
         ):
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 self.connect(sig, handler)
-            except (TypeError, ValueError):
-                pass
 
         shell = os.environ.get("SHELL") or "/bin/bash"
         self.spawn_async(
@@ -57,7 +56,8 @@ class JFTermTerminal(Vte.Terminal):
             [shell, "-l"],
             None,
             GLib.SpawnFlags.DEFAULT,
-            None, None,
+            None,
+            None,
             -1,
             None,
             self._on_spawned,

@@ -1,4 +1,4 @@
-from jfterm.models import Project, Tab, Workspace
+from jfterm.models import Tab, Workspace
 
 
 def test_workspace_starts_empty_with_unsorted_only():

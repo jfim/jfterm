@@ -41,13 +41,22 @@ def test_save_creates_parent_directories(tmp_path: Path):
 def test_unknown_fields_are_preserved(tmp_path: Path):
     """Forward-compat: future versions may add fields; we should not drop them."""
     path = tmp_path / "projects.json"
-    path.write_text(json.dumps({
-        "version": 1,
-        "projects": [
-            {"id": "abc", "name": "A", "directory": "/tmp/a",
-             "expanded": True, "future_field": {"x": 1}}
-        ],
-    }))
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "projects": [
+                    {
+                        "id": "abc",
+                        "name": "A",
+                        "directory": "/tmp/a",
+                        "expanded": True,
+                        "future_field": {"x": 1},
+                    }
+                ],
+            }
+        )
+    )
     ws = Workspace()
     load_projects(ws, path)
     save_projects(ws, path)
