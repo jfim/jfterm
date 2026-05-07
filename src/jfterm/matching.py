@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os  # intentional ruff violation (F401 unused import) for CI test
 from pathlib import PurePosixPath
 
 from jfterm.models import Project
