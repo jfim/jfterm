@@ -42,7 +42,7 @@ def show_project_dialog(
     ],
     on_disband: Callable[[], None] | None = None,
 ) -> None:
-    dlg = Adw.Window(transient_for=parent, modal=True, title=title, default_width=480)
+    dlg = Adw.Window(transient_for=parent, modal=True, title=title, default_width=640)
 
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
     box.set_margin_start(16)
@@ -90,6 +90,7 @@ def show_project_dialog(
     cmd_header_label = Gtk.Label(label="Command", xalign=0)
     cmd_header_label.add_css_class("dim-label")
     cmd_header_label.set_hexpand(True)
+    cmd_header_label.set_margin_start(8)
     delay_header_label = Gtk.Label(label="Delay (secs)", xalign=0)
     delay_header_label.add_css_class("dim-label")
     delay_header_label.set_width_chars(12)
@@ -207,10 +208,12 @@ def show_project_dialog(
     flash_name_header = Gtk.Label(label="Name", xalign=0)
     flash_name_header.add_css_class("dim-label")
     flash_name_header.set_width_chars(14)
+    flash_name_header.set_margin_start(8)
     flash_cmd_header = Gtk.Label(label="Command", xalign=0)
     flash_cmd_header.add_css_class("dim-label")
     flash_cmd_header.set_hexpand(True)
-    flash_keep_header = Gtk.Label(label="Keep open\non exit 0", xalign=0)
+    flash_cmd_header.set_margin_start(8)
+    flash_keep_header = Gtk.Label(label="Keep open", xalign=0)
     flash_keep_header.add_css_class("dim-label")
     flash_focus_header = Gtk.Label(label="Focus", xalign=0)
     flash_focus_header.add_css_class("dim-label")
