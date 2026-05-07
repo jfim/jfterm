@@ -310,12 +310,13 @@ class JFTermWindow(Adw.ApplicationWindow):
         group: Group,
         *,
         spec,  # jfterm.linked.LinkedSpec
-        flash_name: str,
+        flash_name: str | None = None,
+        from_startup: bool = False,
+        linked_source: str | None = None,
         focus: bool = True,
     ) -> LinkedTab:
         from jfterm.linkedtab import JFTermLinkedView, is_available
         from jfterm.models import LinkedTab
-        from jfterm.url_scanner import UrlScanner
 
         if not is_available():
             # Fall back to a plain terminal tab with a "WebKit missing" note.
@@ -326,36 +327,71 @@ class JFTermWindow(Adw.ApplicationWindow):
                 command=f'echo "JFTerm: linked: needs {WEBKIT_PACKAGE}"',
                 focus=focus,
             )
-            fb.flash_name = flash_name
-            fb.title = f"⚡ {flash_name}"
+            if flash_name is not None:
+                fb.flash_name = flash_name
+                fb.title = f"⚡ {flash_name}"
+            elif from_startup:
+                fb.from_startup = True
+                fb.title = f"▶ {linked_source or spec.command}"
             return fb  # type: ignore[return-value]  # caller treats as best-effort
 
         cwd = group.directory if isinstance(group, Project) else None
-        wrapped = wrap_flash_command(
-            FlashCommand(name=flash_name, command=spec.command),
-        )
+        # Flash linked tabs use the wrap_flash_command exit-on-success
+        # wrapper. Startup linked tabs run the raw command (mirroring how
+        # plain startup terminal tabs behave) and close on child exit.
+        if flash_name is not None:
+            send = wrap_flash_command(
+                FlashCommand(name=flash_name, command=spec.command),
+            )
+        else:
+            send = spec.command
         view = JFTermLinkedView(
             cwd=cwd,
-            send_after_spawn=wrapped,
+            send_after_spawn=send,
             appearance=self._settings,
             initial_url=spec.url,  # None means auto-detect
         )
 
+        if flash_name is not None:
+            initial_title = f"⚡ {flash_name}"
+        elif from_startup:
+            initial_title = f"▶ {linked_source or spec.command}"
+        else:
+            initial_title = spec.command
+
         tab = LinkedTab(
-            title=f"⚡ {flash_name}",
+            title=initial_title,
             terminal=view.terminal,
             web_view=view.web_view,
             paned=view,
             launched_command=spec.command,
             flash_name=flash_name,
+            from_startup=from_startup,
             linked_url=spec.url,
+            linked_auto=spec.url is None,
+            linked_source=linked_source,
         )
 
-        # Wire terminal lifecycle signals — same handlers as TerminalTab
-        # so dot/progress/title plumbing still works. We replace the
-        # close-tab handler with a linked-tab-aware version that decides
-        # whether to collapse the webview or close the whole tab.
-        term = view.terminal
+        self._wire_linked_terminal(tab, view, view.terminal)
+
+        # Mount in the same stack used by terminal/web tabs.
+        self.terminal_stack.add_child(view)
+        group.add_tab(tab)
+        if focus:
+            self._current_group = group
+            self.terminal_stack.set_visible_child(view)
+            self.sidebar.set_active_tab(tab)
+            view.grab_focus()
+        self.sidebar.refresh()
+        return tab
+
+    def _wire_linked_terminal(self, tab: LinkedTab, view: Any, term: Any) -> None:
+        """Wire signals from a linked tab's terminal to the per-tab handlers.
+        Used both at first spawn and when restarting in place — each handler
+        guards on `t.terminal is term` so the old terminal's lingering signals
+        after a restart cannot mutate the tab that now owns a fresh one."""
+        from jfterm.url_scanner import UrlScanner
+
         term.connect(
             "cwd-changed",
             lambda _t, path, t=tab, x=term: (
@@ -380,15 +416,30 @@ class JFTermWindow(Adw.ApplicationWindow):
                 self._on_tab_progress(t, state, value) if t.terminal is x else None
             ),
         )
-        term.connect(
-            "child-exited",
-            lambda _t, status, t=tab, v=view, x=term: (
-                self._on_linked_child_exited(t, v, status) if t.terminal is x else None
-            ),
-        )
+        # Flash linked tabs use the exit-on-success wrapper, so on exit 0
+        # we close the tab and on non-zero we collapse the webview pane.
+        # Startup linked tabs run the raw command — close on any exit,
+        # mirroring TerminalTab's child-exited behavior.
+        if tab.flash_name is not None:
+            term.connect(
+                "child-exited",
+                lambda _t, status, t=tab, v=view, x=term: (
+                    self._on_linked_child_exited(t, v, status) if t.terminal is x else None
+                ),
+            )
+        else:
+            term.connect(
+                "child-exited",
+                lambda _t, _status, t=tab, x=term: (
+                    self._on_close_tab(self.sidebar, t) if t.terminal is x else None
+                ),
+            )
 
-        # auto-detect URL: scan terminal output for the first http(s) URL.
-        if spec.url is None:
+        # auto-detect URL: scan terminal output for the first http(s) URL,
+        # then load it in the (already-mounted) webview. After a restart
+        # `linked_url` is reset to None so the next URL seen reloads the
+        # browser pane.
+        if tab.linked_auto:
             scanner = UrlScanner()
 
             def _on_output(_t, data, sc=scanner, v=view, t=tab, x=term):
@@ -401,17 +452,6 @@ class JFTermWindow(Adw.ApplicationWindow):
                     v.set_url(found)
 
             term.connect("output-data", _on_output)
-
-        # Mount in the same stack used by terminal/web tabs.
-        self.terminal_stack.add_child(view)
-        group.add_tab(tab)
-        if focus:
-            self._current_group = group
-            self.terminal_stack.set_visible_child(view)
-            self.sidebar.set_active_tab(tab)
-            view.grab_focus()
-        self.sidebar.refresh()
-        return tab
 
     def _on_linked_child_exited(self, tab, view, status: int) -> None:
         # Mirror wrap_flash_command's contract: on exit 0 the wrapper
@@ -458,7 +498,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             tab.url = url
 
     def _on_close_tab(self, _sb, tab: Tab) -> None:
-        if isinstance(tab, TerminalTab) and tab.is_restarting:
+        if isinstance(tab, (TerminalTab, LinkedTab)) and tab.is_restarting:
             return
         group = self.ws._find_group(tab)
         was_visible = (
@@ -496,8 +536,11 @@ class JFTermWindow(Adw.ApplicationWindow):
         else:
             self._show_empty(group)
 
-    def _on_restart_tab(self, _sb, tab: TerminalTab) -> None:
+    def _on_restart_tab(self, _sb, tab: TerminalTab | LinkedTab) -> None:
         if not tab.launched_command:
+            return
+        if isinstance(tab, LinkedTab):
+            self._restart_linked_tab(tab)
             return
         from gi.repository import GLib
 
@@ -554,6 +597,92 @@ class JFTermWindow(Adw.ApplicationWindow):
 
         if was_visible:
             self.terminal_stack.set_visible_child(new_terminal)
+            new_terminal.grab_focus()
+
+        self.sidebar.refresh()
+
+    def _restart_linked_tab(self, tab: LinkedTab) -> None:
+        """Replace the linked tab's terminal in place inside its Paned.
+        The webview is preserved. In auto mode `linked_url` is reset so
+        the first URL printed by the new process reloads the webview;
+        in explicit-URL mode the webview is left untouched."""
+        from gi.repository import GLib
+
+        from jfterm.terminal import JFTermTerminal
+
+        view = tab.paned
+        if view is None:
+            return
+        group = self.ws._find_group(tab)
+        cwd = group.directory if isinstance(group, Project) else None
+        command = tab.launched_command
+        if command is None:
+            return
+        # Mirror the flash/startup wrapper choice from _spawn_linked_tab.
+        if tab.flash_name is not None:
+            send = wrap_flash_command(
+                FlashCommand(name=tab.flash_name, command=command),
+            )
+        else:
+            send = command
+
+        old_terminal = tab.terminal
+        old_pid = old_terminal.shell_pid if old_terminal is not None else None
+
+        # Block the old terminal's child-exited from collapsing the
+        # webview or closing the tab while the swap is in flight.
+        tab.is_restarting = True
+
+        if old_pid is not None:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(old_pid, signal.SIGTERM)
+
+            def _force_kill(pid: int = old_pid) -> bool:
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
+                    return False
+                with contextlib.suppress(ProcessLookupError):
+                    os.kill(pid, signal.SIGKILL)
+                return False
+
+            GLib.timeout_add(1500, _force_kill)
+
+        if old_terminal is not None:
+            old_terminal._proxy.close()  # break GLib closure ref before GTK dispose
+
+        new_terminal = JFTermTerminal(cwd=cwd, send_after_spawn=send, appearance=self._settings)
+        new_terminal.set_vexpand(True)
+        new_terminal.set_hexpand(True)
+
+        # Swap the terminal pane inside the JFTermLinkedView. The webview
+        # (start child) stays where it is.
+        view.set_end_child(new_terminal)
+        view.terminal = new_terminal
+
+        tab.terminal = new_terminal
+        tab.shell_pid = None
+        tab.pty_fd = None
+        tab.is_running = False
+        tab.osc133_seen = False
+        # In auto mode, re-arm the URL scanner so the first URL the new
+        # process prints reloads the webview.
+        if tab.linked_auto:
+            tab.linked_url = None
+
+        # Title prefix mirrors initial spawn.
+        if tab.flash_name is not None:
+            tab.title = f"⚡ {tab.flash_name}"
+        elif tab.from_startup:
+            tab.title = f"▶ {tab.linked_source or command}"
+        else:
+            tab.title = command
+
+        self._wire_linked_terminal(tab, view, new_terminal)
+
+        tab.is_restarting = False
+
+        if self.terminal_stack.get_visible_child() is view:
             new_terminal.grab_focus()
 
         self.sidebar.refresh()
@@ -708,6 +837,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             self.sidebar.refresh()
         from gi.repository import GLib
 
+        from jfterm.linked import parse_linked
         from jfterm.url_routing import is_web_url
 
         running_terminal = {
@@ -716,10 +846,15 @@ class JFTermWindow(Adw.ApplicationWindow):
             if isinstance(t, TerminalTab) and t.launched_command
         }
         running_web = {t.url for t in project.tabs if isinstance(t, WebTab)}
+        running_linked_sources = {
+            t.linked_source for t in project.tabs if isinstance(t, LinkedTab) and t.linked_source
+        }
         cmds = [
             sc
             for sc in project.startup_commands
-            if sc.command not in running_terminal and sc.command.strip() not in running_web
+            if sc.command not in running_terminal
+            and sc.command.strip() not in running_web
+            and sc.command not in running_linked_sources
         ]
         spawn_blank = project.spawn_blank_after_startup
 
@@ -731,7 +866,25 @@ class JFTermWindow(Adw.ApplicationWindow):
             sc = cmds[idx]
             is_last = idx == len(cmds) - 1
             focus = sc.delay > 0 or (is_last and not spawn_blank)
-            if is_web_url(sc.command):
+            linked_spec = parse_linked(sc.command)
+            if linked_spec is not None:
+                try:
+                    self._spawn_linked_tab(
+                        project,
+                        spec=linked_spec,
+                        from_startup=True,
+                        linked_source=sc.command,
+                        focus=focus,
+                    )
+                except RuntimeError as e:
+                    fb = self._spawn_tab(
+                        project,
+                        command=f'echo "JFTerm: {e}"',
+                        focus=focus,
+                    )
+                    fb.from_startup = True
+                    fb.title = f"▶ {sc.command}"
+            elif is_web_url(sc.command):
                 try:
                     self._spawn_web_tab(
                         project,
