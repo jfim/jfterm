@@ -1,6 +1,6 @@
 import re
 
-from jfterm.palettes import PALETTES, Palette, get
+from jfterm.palettes import PALETTES, get
 
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 
