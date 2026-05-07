@@ -6,6 +6,7 @@ from gi.repository import Gdk, GObject, Gtk
 
 from jfterm.matching import is_inside, matching_projects
 from jfterm.models import Group, Project, Tab, Workspace
+from jfterm.progress_bar import TabProgressBar
 from jfterm.status_dot import StatusDot
 
 
@@ -72,6 +73,10 @@ class Sidebar(Gtk.ScrolledWindow):
             b"background-color: alpha(@accent_bg_color, 0.25); "
             b"border-radius: 6px; "
             b"}"
+            b".progress-normal        { color: @accent_bg_color; }"
+            b".progress-error         { color: @error_bg_color; }"
+            b".progress-paused        { color: @warning_bg_color; }"
+            b".progress-indeterminate { color: @accent_bg_color; }"
         )
         display = Gdk.Display.get_default()
         if display is not None:
@@ -417,6 +422,13 @@ class Sidebar(Gtk.ScrolledWindow):
         title.set_child(title_label)
         title.connect("clicked", lambda _b, t=tab: self.emit("tab-activated", t))
 
+        title_overlay = Gtk.Overlay()
+        title_overlay.set_hexpand(True)
+        title_overlay.set_child(title)
+        progress_bar = TabProgressBar()
+        title_overlay.add_overlay(progress_bar)
+        tab._progress_bar = progress_bar  # type: ignore[attr-defined]  # runtime back-ref, like _dot
+
         restart = None
         if tab.launched_command:
             restart = Gtk.Button.new_from_icon_name("view-refresh-symbolic")
@@ -438,7 +450,7 @@ class Sidebar(Gtk.ScrolledWindow):
         self._attach_drag(row, tab)
         self._attach_drop(row, group, lambda pos=position_in_group: pos)
 
-        widgets: list[Gtk.Widget] = [dot, title]
+        widgets: list[Gtk.Widget] = [dot, title_overlay]
         if restart is not None:
             widgets.append(restart)
         widgets.append(close)

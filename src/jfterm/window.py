@@ -176,6 +176,12 @@ class JFTermWindow(Adw.ApplicationWindow):
                 self._on_close_tab(self.sidebar, t) if t.terminal is term else None
             ),
         )
+        terminal.connect(
+            "progress-changed",
+            lambda _t, state, value, t=tab, term=terminal: (
+                self._on_tab_progress(t, state, value) if t.terminal is term else None
+            ),
+        )
 
     def _on_close_tab(self, _sb, tab: Tab) -> None:
         if tab.is_restarting:
@@ -470,7 +476,19 @@ class JFTermWindow(Adw.ApplicationWindow):
         if tab.is_running == running:
             return
         tab.is_running = running
+        if not running:
+            self._clear_tab_progress(tab)
         self._refresh_tab_dot(tab)
+
+    def _on_tab_progress(self, tab: Tab, state: int, value: int) -> None:
+        bar = getattr(tab, "_progress_bar", None)
+        if bar is not None:
+            bar.set_progress(state, value)
+
+    def _clear_tab_progress(self, tab: Tab) -> None:
+        bar = getattr(tab, "_progress_bar", None)
+        if bar is not None:
+            bar.set_progress(0, 0)
 
     def _on_tab_title_changed(self, tab: Tab, title: str) -> None:
         if tab.flash_name is not None:
