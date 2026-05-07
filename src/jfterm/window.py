@@ -1089,10 +1089,8 @@ class JFTermWindow(Adw.ApplicationWindow):
         if height > 0:
             self._settings.window_height = height
         self._settings.window_maximized = maximized
-        try:
+        with contextlib.suppress(OSError):
             save_settings(self._settings, self._settings_path)
-        except OSError:
-            pass
 
     def _on_close_request(self, _win) -> bool:
         from gi.repository import GLib
