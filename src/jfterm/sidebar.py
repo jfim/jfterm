@@ -229,7 +229,7 @@ class Sidebar(Gtk.ScrolledWindow):
         title.set_child(title_label)
         title.connect("clicked", lambda _b, t=tab: self.emit("tab-activated", t))
 
-        restart: Gtk.Button | None = None
+        restart = None
         if tab.launched_command:
             restart = Gtk.Button.new_from_icon_name("view-refresh-symbolic")
             restart.add_css_class("flat")
