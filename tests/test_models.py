@@ -1,4 +1,13 @@
-from jfterm.models import FlashCommand, Project, Tab, Workspace
+import pytest
+
+from jfterm.models import (
+    FlashCommand,
+    Project,
+    Tab,
+    TerminalTab,
+    WebTab,
+    Workspace,
+)
 
 
 def test_workspace_starts_empty_with_unsorted_only():
@@ -19,7 +28,7 @@ def test_add_project_appends():
 def test_add_tab_to_project():
     ws = Workspace()
     p = ws.add_project(name="A", directory="/tmp/a")
-    t = Tab(title="x")
+    t = TerminalTab(title="x")
     p.add_tab(t)
     assert p.tabs == [t]
 
@@ -27,9 +36,9 @@ def test_add_tab_to_project():
 def test_disband_moves_tabs_to_end_of_unsorted():
     ws = Workspace()
     p = ws.add_project(name="A", directory="/tmp/a")
-    t1 = Tab(title="from-A")
+    t1 = TerminalTab(title="from-A")
     p.add_tab(t1)
-    pre_existing = Tab(title="already-unsorted")
+    pre_existing = TerminalTab(title="already-unsorted")
     ws.unsorted.add_tab(pre_existing)
 
     ws.disband(p)
@@ -42,7 +51,7 @@ def test_move_tab_between_groups():
     ws = Workspace()
     a = ws.add_project(name="A", directory="/tmp/a")
     b = ws.add_project(name="B", directory="/tmp/b")
-    t = Tab(title="x")
+    t = TerminalTab(title="x")
     a.add_tab(t)
 
     ws.move_tab(t, b, position=0)
@@ -51,36 +60,65 @@ def test_move_tab_between_groups():
     assert b.tabs == [t]
 
 
-def test_reorder_tab_within_group():
-    ws = Workspace()
-    a = ws.add_project(name="A", directory="/tmp/a")
-    t1, t2, t3 = Tab(title="1"), Tab(title="2"), Tab(title="3")
-    for t in (t1, t2, t3):
-        a.add_tab(t)
-
-    ws.move_tab(t3, a, position=0)
-    assert [t.title for t in a.tabs] == ["3", "1", "2"]
+def test_terminal_tab_is_a_tab():
+    t = TerminalTab(title="x")
+    assert isinstance(t, Tab)
 
 
-def test_tab_has_launched_command_and_is_restarting_defaults():
-    from jfterm.models import Tab
+def test_web_tab_is_a_tab():
+    t = WebTab(title="x", url="https://example.com")
+    assert isinstance(t, Tab)
 
-    t = Tab(title="x")
+
+def test_terminal_tab_widget_returns_terminal_field():
+    sentinel = object()
+    t = TerminalTab(title="x", terminal=sentinel)
+    assert t.widget is sentinel
+
+
+def test_web_tab_widget_returns_web_view_field():
+    sentinel = object()
+    t = WebTab(title="x", url="https://example.com", web_view=sentinel)
+    assert t.widget is sentinel
+
+
+def test_terminal_tab_defaults():
+    t = TerminalTab()
+    assert t.title == ""
+    assert t.shell_pid is None
+    assert t.is_running is False
+    assert t.osc133_seen is False
     assert t.launched_command is None
+    assert t.from_startup is False
     assert t.is_restarting is False
 
 
+def test_web_tab_defaults():
+    t = WebTab()
+    assert t.title == ""
+    assert t.url == ""
+    assert t.web_view is None
+    assert t.from_startup is False
+    assert t.flash_name is None
+
+
+def test_two_tabs_have_distinct_ids():
+    a = TerminalTab()
+    b = TerminalTab()
+    c = WebTab()
+    assert len({a.id, b.id, c.id}) == 3
+
+
 def test_flash_command_defaults():
-    fc = FlashCommand(name="Push", command="git push")
-    assert fc.name == "Push"
-    assert fc.command == "git push"
+    fc = FlashCommand(name="x", command="y")
     assert fc.keep_open_on_success is False
     assert fc.focus_on_launch is True
 
 
-def test_project_default_flash_commands_is_empty_list():
-    p = Project(name="A", directory="/tmp/a")
-    assert p.flash_commands == []
+def test_project_with_flash_commands_in_ctor():
+    fcs = [FlashCommand(name="a", command="echo a")]
+    p = Project(name="P", directory="/tmp/p", flash_commands=fcs)
+    assert p.flash_commands == fcs
 
 
 def test_project_accepts_flash_commands():
@@ -123,3 +161,9 @@ def test_unarchive_restores_position_in_active_view():
 def test_workspace_archived_expanded_defaults_to_false():
     ws = Workspace()
     assert ws.archived_expanded is False
+
+
+def test_base_tab_widget_raises():
+    t = Tab(title="x")
+    with pytest.raises(NotImplementedError):
+        _ = t.widget

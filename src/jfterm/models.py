@@ -26,8 +26,24 @@ class FlashCommand:
 
 @dataclass
 class Tab:
+    """Base class for a tab. Concrete subclasses below mount different
+    widgets (a VTE terminal or a WebKit view) in the window's stack."""
+
     title: str = ""
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    # Sidebar attaches the row's StatusDot here for terminal tabs so the
+    # runtime layer can update its visual state without a full sidebar refresh.
+    # Web tabs leave this None.
+    _dot: Any = None
+
+    @property
+    def widget(self) -> Any:
+        """The GTK widget mounted in the window's terminal_stack."""
+        raise NotImplementedError
+
+
+@dataclass
+class TerminalTab(Tab):
     # Runtime-only fields populated when a real terminal is attached:
     terminal: Any = None
     shell_pid: int | None = None
@@ -47,9 +63,25 @@ class Tab:
     # True while a restart is in flight, so the old terminal's child-exited
     # signal does not remove the tab from its group.
     is_restarting: bool = False
-    # Sidebar attaches the row's StatusDot here so the runtime layer can
-    # update its visual state without a full sidebar refresh.
-    _dot: Any = None
+
+    @property
+    def widget(self) -> Any:
+        return self.terminal
+
+
+@dataclass
+class WebTab(Tab):
+    # The URL the tab was launched with — used as title fallback and for the
+    # "skip if already running" check during project launch.
+    url: str = ""
+    # The JFTermWebView widget mounted in the stack.
+    web_view: Any = None
+    from_startup: bool = False
+    flash_name: str | None = None
+
+    @property
+    def widget(self) -> Any:
+        return self.web_view
 
 
 class Group:

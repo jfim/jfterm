@@ -6,19 +6,17 @@ _on_close_tab actually touches, and assert the early-return behaviour.
 
 from types import SimpleNamespace
 
-from jfterm.models import Tab, Workspace
+from jfterm.models import TerminalTab, Workspace
 from jfterm.window import JFTermWindow
 
 
 def test_on_close_tab_is_noop_when_tab_is_restarting():
     ws = Workspace()
     p = ws.add_project(name="A", directory="/tmp/a")
-    tab = Tab(title="x")
+    tab = TerminalTab(title="x")
     p.add_tab(tab)
     tab.is_restarting = True
 
-    # Stand-in window: only the attributes _on_close_tab references when
-    # short-circuiting on is_restarting.
     fake_self = SimpleNamespace(
         ws=ws,
         terminal_stack=None,
