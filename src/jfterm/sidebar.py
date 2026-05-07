@@ -446,6 +446,9 @@ class Sidebar(Gtk.ScrolledWindow):
 
         for w in (chevron, label_btn, plus):
             row.append(w)
+
+        self._attach_drop(row, group, lambda g=group: len(g.tabs))
+
         self._box.append(row)
 
     def _add_archived_header(self) -> None:
