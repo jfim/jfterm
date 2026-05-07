@@ -186,7 +186,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             and self.terminal_stack.get_visible_child() is tab.terminal
         )
         old_terminal = tab.terminal
-        old_pid = tab.shell_pid
+        old_pid = old_terminal.shell_pid if old_terminal is not None else None
 
         # Block the old terminal's child-exited from closing the tab.
         tab.is_restarting = True
