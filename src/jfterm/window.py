@@ -1038,6 +1038,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         settings.window_width = self._settings.window_width
         settings.window_height = self._settings.window_height
         settings.window_maximized = self._settings.window_maximized
+        previous_shortcut = self._settings.launcher_shortcut
         self._settings = settings
         try:
             save_settings(settings, self._settings_path)
@@ -1045,6 +1046,9 @@ class JFTermWindow(Adw.ApplicationWindow):
             print(f"jfterm: failed to save settings: {e}", file=sys.stderr)
         for terminal in self._iter_terminals():
             terminal.apply_appearance(settings)
+        if settings.launcher_shortcut != previous_shortcut:
+            self._uninstall_launcher_shortcut()
+            self._install_launcher_shortcut(settings.launcher_shortcut)
 
     def _iter_terminals(self) -> Iterator[JFTermTerminal]:
         for group in self.ws.all_groups():
