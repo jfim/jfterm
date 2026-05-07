@@ -41,9 +41,7 @@ def load_projects(ws: Workspace, path: Path) -> None:
             directory=entry["directory"],
             expanded=entry.get("expanded", True),
             startup_commands=_load_commands(entry.get("startup_commands", [])),
-            spawn_blank_after_startup=bool(
-                entry.get("spawn_blank_after_startup", False)
-            ),
+            spawn_blank_after_startup=bool(entry.get("spawn_blank_after_startup", False)),
         )
         # Stash unknown fields for forward compatibility.
         p._extra = {k: v for k, v in entry.items() if k not in _KNOWN_FIELDS}
