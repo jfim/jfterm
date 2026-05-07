@@ -9,8 +9,10 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("Vte", "3.91")
 
-from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Vte  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Pango, Vte  # noqa: E402
 
+from jfterm.palettes import get as get_palette  # noqa: E402
+from jfterm.settings import AppSettings  # noqa: E402
 from jfterm.pty_proxy import PtyProxy  # noqa: E402
 
 
@@ -35,6 +37,7 @@ class JFTermTerminal(Vte.Terminal):
         self,
         cwd: str | None = None,
         send_after_spawn: str | None = None,
+        appearance: AppSettings | None = None,
     ) -> None:
         super().__init__()
         self._initial_cwd = cwd or str(Path.home())
@@ -62,6 +65,9 @@ class JFTermTerminal(Vte.Terminal):
 
         self._install_context_menu()
 
+        if appearance is not None:
+            self.apply_appearance(appearance)
+
     @property
     def shell_pid(self) -> int | None:
         return self._proxy.shell_pid
@@ -69,6 +75,39 @@ class JFTermTerminal(Vte.Terminal):
     @property
     def pty_fd(self) -> int | None:
         return self._proxy.pty_fd
+
+    def apply_appearance(self, settings: AppSettings) -> None:
+        """Apply font + color-scheme settings. Idempotent."""
+        # Font
+        if settings.font_desc:
+            self.set_font(Pango.FontDescription.from_string(settings.font_desc))
+        else:
+            self.set_font(None)
+
+        # Palette
+        palette = get_palette(settings.palette_id)
+        if palette.id == "system" or not palette.colors:
+            self.set_colors(None, None, [])
+            self.set_color_cursor(None)
+            return
+
+        fg = Gdk.RGBA()
+        fg.parse(palette.foreground)
+        bg = Gdk.RGBA()
+        bg.parse(palette.background)
+        ansi = []
+        for hex_str in palette.colors:
+            rgba = Gdk.RGBA()
+            rgba.parse(hex_str)
+            ansi.append(rgba)
+        self.set_colors(fg, bg, ansi)
+
+        if palette.cursor is not None:
+            cursor = Gdk.RGBA()
+            cursor.parse(palette.cursor)
+            self.set_color_cursor(cursor)
+        else:
+            self.set_color_cursor(None)
 
     # --- context menu (unchanged) ---
 
