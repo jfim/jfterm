@@ -8,7 +8,9 @@ authors = [
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
-dependencies = []
+dependencies = [
+    "mcp>=1.0",
+]
 
 [project.scripts]
 jfterm = "jfterm:main"
@@ -20,6 +22,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "pytest-asyncio>=0.24",
     "ruff>=0.8",
     "pyright>=1.1",
 ]
@@ -57,6 +60,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
 
 [tool.uv]
 # Use the system python so the venv (created with --system-site-packages)
