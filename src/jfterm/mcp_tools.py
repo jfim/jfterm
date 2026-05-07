@@ -32,3 +32,13 @@ async def list_tabs(controller: MCPController, params: ListTabsInput) -> dict:
     return {
         "tabs": [asdict(t) for t in controller.list_tabs(params.project_name)],
     }
+
+
+class SpawnTabInput(BaseModel):
+    project_name: str
+    command: str
+
+
+async def spawn_tab(controller: MCPController, params: SpawnTabInput) -> dict:
+    tab = controller.spawn_tab(params.project_name, params.command)
+    return {"tab": asdict(tab)}

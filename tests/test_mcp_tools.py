@@ -7,10 +7,12 @@ import pytest
 from jfterm.mcp_tools import (
     list_projects,
     list_tabs,
+    spawn_tab,
     ListProjectsInput,
     ListTabsInput,
+    SpawnTabInput,
 )
-from jfterm.mcp_types import ProjectNotFound
+from jfterm.mcp_types import EmptyCommand, ProjectNotFound
 from tests.fakes import FakeController
 
 
@@ -61,3 +63,28 @@ async def test_list_tabs_unknown_project_raises():
     ctrl = FakeController()
     with pytest.raises(ProjectNotFound):
         await list_tabs(ctrl, ListTabsInput(project_name="nope"))
+
+
+async def test_spawn_tab_returns_new_tab_and_records():
+    ctrl = FakeController()
+    ctrl.add_project("alpha", "/a")
+    result = await spawn_tab(
+        ctrl, SpawnTabInput(project_name="alpha", command="vim README.md")
+    )
+    assert result["tab"]["title"] == "vim README.md"
+    assert result["tab"]["project"] == "alpha"
+    assert result["tab"]["launched_command"] == "vim README.md"
+    assert ctrl.spawn_log == [("alpha", "vim README.md")]
+
+
+async def test_spawn_tab_empty_command_raises():
+    ctrl = FakeController()
+    ctrl.add_project("alpha", "/a")
+    with pytest.raises(EmptyCommand):
+        await spawn_tab(ctrl, SpawnTabInput(project_name="alpha", command=""))
+
+
+async def test_spawn_tab_unknown_project_raises():
+    ctrl = FakeController()
+    with pytest.raises(ProjectNotFound):
+        await spawn_tab(ctrl, SpawnTabInput(project_name="nope", command="ls"))
