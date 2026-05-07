@@ -9,25 +9,32 @@ one-click access to each project's setup.
 
 ## Features
 
-- Per-project tab groups in a sidebar, plus an Unsorted bucket for ad-hoc tabs.
-- One-click launch of a project's configured startup commands, with
-  per-command delays, drag-and-drop reordering, and skipping of commands
-  already running in the project.
-- Flash commands: a per-project menu of one-off commands you can fire into
-  a new tab from the sidebar.
-- Restart button on tabs spawned from a startup command — kills the shell
-  and re-runs the original command in place.
-- Status dot per tab showing whether the shell is busy and whether the cwd
-  matches the tab's project.
-- Drag-and-drop to move tabs between projects.
-- Command launcher: double-tap Left Shift to fuzzy-search every flash
-  command, project action, and open tab in one ranked list.
-- Web tabs: any startup or flash command starting with `http://` or
-  `https://` opens a WebKitGTK mini-browser (back/forward/reload + URL
-  bar) in place of a shell. Right-click a group's `+` button for an
-  ad-hoc "New web tab…" prompt. Cookies and localStorage persist across
-  tabs and JFTerm restarts under `~/.local/share/jfterm/webkit/`.
-- Built on GTK 4 / libadwaita with VTE 3.91 for the terminal itself.
+- **Per-project tab groups** so each project's tabs stay together.
+- **One-click project launch** each project has a configured list of
+  startup commands; run the database server, the web server, and vim in one
+  click
+- **Flash commands** a per-project menu of one-off commands fired into
+  a new tab for things you run often but not on launch.
+- **Restartable tabs** tabs spawned from a startup or flash command
+  carry a ↻ button that restarts the command in the tab; perfect for restarting
+  the web server
+- **Per-tab status dot** showing whether the shell is busy and whether
+  its cwd still matches the project (driven by OSC 7 / OSC 133).
+- **Drag-and-drop tabs between projects** for when you open a terminal in the
+  wrong directory
+- **Command launcher** to launch flash commands without the mouse
+
+  ![Command launcher](images/command-launcher.png)
+
+- **Web tabs** allow you to open GitHub, ~~HN~~, and Jira at the same time
+- **Linked tabs** a command of the form `linked: <url|auto> <cmd>` opens a
+  split tab with a webview on top and the command's terminal below. Perfect for
+  web servers, static blog previewers, and jupyter notebooks
+
+  ![Linked tab](images/linked-tab.png)
+
+- **Built-in MCP server** (off by default) to allow your favorite LLM to
+  restart the webserver and open new tabs
 
 ## Running
 
@@ -39,24 +46,8 @@ System libraries (Ubuntu 24.04 — adjust package names for other distros):
         libvte-2.91-gtk4-0 \
         python3-gi python3-cairo
 
-On Ubuntu 24.04, web tabs additionally need an AppArmor profile that
-allows `bwrap` (WebKit's sandbox helper) to use unprivileged user
-namespaces — without it, web tabs fail to start with a `bwrap: setting up
-uid map: Permission denied` error. The minimal scoped fix:
-
-    sudo tee /etc/apparmor.d/bwrap > /dev/null <<'EOF'
-    abi <abi/4.0>,
-    include <tunables/global>
-
-    profile bwrap /usr/bin/bwrap flags=(unconfined) {
-      userns,
-      include if exists <local/bwrap>
-    }
-    EOF
-    sudo apparmor_parser -r /etc/apparmor.d/bwrap
-
-This grants user-namespace use to `/usr/bin/bwrap` only; the rest of the
-system stays restricted.
+You'll also need [`just`](https://github.com/casey/just) and
+[`uv`](https://github.com/astral-sh/uv) on your `PATH`.
 
 Then either install it as a desktop application (recommended — adds an
 application-menu launcher that pins cleanly to the dock):
@@ -71,6 +62,28 @@ application-menu launcher that pins cleanly to the dock):
 file under `~/.local/share/applications/`, the icon under
 `~/.local/share/icons/hicolor/scalable/apps/`, and an isolated venv at
 `~/.local/share/jfterm/venv`. `just uninstall` reverses everything.
+
+### Web/linked tabs on Ubuntu 24.04
+
+Web and linked tabs need an AppArmor profile that allows `bwrap`
+(WebKit's sandbox helper) to use unprivileged user namespaces —
+otherwise they fail to start with `bwrap: setting up uid map:
+Permission denied`. Skip this if you don't intend to use web or linked
+tabs. The minimal scoped fix:
+
+    sudo tee /etc/apparmor.d/bwrap > /dev/null <<'EOF'
+    abi <abi/4.0>,
+    include <tunables/global>
+
+    profile bwrap /usr/bin/bwrap flags=(unconfined) {
+      userns,
+      include if exists <local/bwrap>
+    }
+    EOF
+    sudo apparmor_parser -r /etc/apparmor.d/bwrap
+
+This grants user-namespace use to `/usr/bin/bwrap` only; the rest of
+the system stays restricted.
 
 ## Shell integration (OSC 7 + OSC 133)
 
@@ -126,9 +139,9 @@ Tools available in this MVP:
 - `restart_tab_tool(id)` — restart a tab spawned with a startup command.
 - `focus_tab_tool(id)` — switch to a tab and bring its input to the foreground.
 
-The server binds to localhost only and has no authentication. A
-preferences UI to enable/disable it and pick a port is on the roadmap;
-see issue #20.
+The server binds to localhost only and has no authentication. It is
+disabled by default — enable it and pick a port from the preferences
+pane.
 
 ## Development
 
