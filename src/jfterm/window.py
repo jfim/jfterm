@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib
 import os
 import signal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import gi
 
@@ -26,6 +26,9 @@ from jfterm.models import (  # noqa: E402
 from jfterm.persistence import default_path, load_projects, save_projects  # noqa: E402
 from jfterm.sidebar import Sidebar  # noqa: E402
 from jfterm.terminal import JFTermTerminal  # noqa: E402
+
+if TYPE_CHECKING:
+    from jfterm.mcp_types import ProjectInfo, TabInfo
 
 
 class JFTermWindow(Adw.ApplicationWindow):
@@ -662,6 +665,75 @@ class JFTermWindow(Adw.ApplicationWindow):
             filled = not matching_projects(tab.current_cwd, self.ws.projects)
         if hasattr(tab, "_dot") and tab._dot is not None:
             tab._dot.set_state(running=tab.is_running, filled=filled)
+
+    def mcp_list_projects(self) -> list[ProjectInfo]:
+        from jfterm.mcp_types import ProjectInfo
+
+        out: list[ProjectInfo] = []
+        for g in self.ws.all_groups():
+            directory = g.directory if isinstance(g, Project) else ""
+            out.append(ProjectInfo(name=g.name, directory=directory, tab_count=len(g.tabs)))
+        return out
+
+    def mcp_list_tabs(self, project_name: str | None) -> list[TabInfo]:
+        from jfterm.mcp_types import ProjectNotFound
+
+        groups: list[Group]
+        if project_name is None:
+            groups = self.ws.all_groups()
+        else:
+            match = next((g for g in self.ws.all_groups() if g.name == project_name), None)
+            if match is None:
+                raise ProjectNotFound(project_name)
+            groups = [match]
+        out: list[TabInfo] = []
+        for g in groups:
+            for t in g.tabs:
+                out.append(self._tab_to_info(t, g.name))
+        return out
+
+    def _tab_to_info(self, tab: Tab, project_name: str) -> TabInfo:
+        from jfterm.mcp_types import TabInfo
+
+        if isinstance(tab, TerminalTab):
+            cwd = tab.current_cwd
+            busy = tab.is_running
+            launched_command = tab.launched_command
+        else:
+            cwd = None
+            busy = False
+            launched_command = None
+        return TabInfo(
+            id=tab.id,
+            title=tab.title,
+            project=project_name,
+            cwd=cwd,
+            busy=busy,
+            launched_command=launched_command,
+        )
+
+    def mcp_spawn_tab(self, project_name: str, command: str) -> TabInfo:
+        from jfterm.mcp_types import EmptyCommand, ProjectNotFound
+
+        if not command:
+            raise EmptyCommand()
+        group = next((g for g in self.ws.all_groups() if g.name == project_name), None)
+        if group is None:
+            raise ProjectNotFound(project_name)
+        tab = self._spawn_tab(group, command=command, focus=False)
+        return self._tab_to_info(tab, group.name)
+
+    def mcp_restart_tab(self, tab_id: str) -> TabInfo:
+        from jfterm.mcp_types import TabHasNoCommand, TabNotFound
+
+        for g in self.ws.all_groups():
+            for t in g.tabs:
+                if t.id == tab_id:
+                    if not isinstance(t, TerminalTab) or not t.launched_command:
+                        raise TabHasNoCommand(tab_id)
+                    self._on_restart_tab(self.sidebar, t)
+                    return self._tab_to_info(t, g.name)
+        raise TabNotFound(tab_id)
 
     # --- shortcut handlers ---
 
