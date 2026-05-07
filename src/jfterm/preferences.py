@@ -40,6 +40,9 @@ class AppPreferencesDialog(Adw.PreferencesDialog):
         self._settings = AppSettings(
             font_desc=settings.font_desc,
             palette_id=settings.palette_id,
+            mcp_enabled=settings.mcp_enabled,
+            mcp_host=settings.mcp_host,
+            mcp_port=settings.mcp_port,
         )
 
         page = Adw.PreferencesPage()
@@ -87,6 +90,33 @@ class AppPreferencesDialog(Adw.PreferencesDialog):
         group.add(self._palette_row)
 
         page.add(group)
+
+        mcp_group = Adw.PreferencesGroup()
+        mcp_group.set_title("MCP server")
+        mcp_group.set_description(
+            "Embedded HTTP server exposing JFTerm to MCP clients. "
+            "Changes take effect on next launch."
+        )
+
+        self._mcp_enabled_row = Adw.SwitchRow()
+        self._mcp_enabled_row.set_title("Enable MCP server")
+        self._mcp_enabled_row.set_active(self._settings.mcp_enabled)
+        self._mcp_enabled_row.connect("notify::active", self._on_mcp_enabled_changed)
+        mcp_group.add(self._mcp_enabled_row)
+
+        self._mcp_host_row = Adw.EntryRow()
+        self._mcp_host_row.set_title("Host")
+        self._mcp_host_row.set_text(self._settings.mcp_host)
+        self._mcp_host_row.connect("changed", self._on_mcp_host_changed)
+        mcp_group.add(self._mcp_host_row)
+
+        self._mcp_port_row = Adw.SpinRow.new_with_range(1, 65535, 1)
+        self._mcp_port_row.set_title("Port")
+        self._mcp_port_row.set_value(self._settings.mcp_port)
+        self._mcp_port_row.connect("notify::value", self._on_mcp_port_changed)
+        mcp_group.add(self._mcp_port_row)
+
+        page.add(mcp_group)
         self.add(page)
 
     # --- handlers ---
@@ -102,8 +132,23 @@ class AppPreferencesDialog(Adw.PreferencesDialog):
             self._settings.palette_id = PALETTES[idx].id
             self.emit("changed", self._copy())
 
+    def _on_mcp_enabled_changed(self, row: Adw.SwitchRow, _pspec) -> None:
+        self._settings.mcp_enabled = row.get_active()
+        self.emit("changed", self._copy())
+
+    def _on_mcp_host_changed(self, row: Adw.EntryRow) -> None:
+        self._settings.mcp_host = row.get_text()
+        self.emit("changed", self._copy())
+
+    def _on_mcp_port_changed(self, row: Adw.SpinRow, _pspec) -> None:
+        self._settings.mcp_port = int(row.get_value())
+        self.emit("changed", self._copy())
+
     def _copy(self) -> AppSettings:
         return AppSettings(
             font_desc=self._settings.font_desc,
             palette_id=self._settings.palette_id,
+            mcp_enabled=self._settings.mcp_enabled,
+            mcp_host=self._settings.mcp_host,
+            mcp_port=self._settings.mcp_port,
         )
