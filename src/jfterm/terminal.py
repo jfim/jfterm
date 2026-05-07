@@ -63,6 +63,7 @@ class JFTermTerminal(Vte.Terminal):
             self._send_after_spawn = None
 
         self._poll_source: int | None = GLib.timeout_add(250, self._poll_tcgetpgrp)
+        self._last_size: tuple[int, int] = (0, 0)
 
         self._install_context_menu()
 
@@ -170,9 +171,20 @@ class JFTermTerminal(Vte.Terminal):
         self._proxy.write(text.encode("utf-8"))
 
     def _on_char_size_changed(self, _t, _w, _h) -> None:
+        self._sync_pty_size()
+
+    def _sync_pty_size(self) -> None:
         cols = self.get_column_count()
         rows = self.get_row_count()
+        size = (rows, cols)
+        if size == self._last_size:
+            return
+        self._last_size = size
         self._proxy.resize(rows, cols)
+
+    def do_size_allocate(self, width: int, height: int, baseline: int) -> None:  # type: ignore[override]
+        Vte.Terminal.do_size_allocate(self, width, height, baseline)
+        self._sync_pty_size()
 
     def do_dispose(self) -> None:  # type: ignore[override]
         if hasattr(self, "_proxy") and self._proxy is not None:
