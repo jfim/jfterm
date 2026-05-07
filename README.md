@@ -107,6 +107,25 @@ fish: `fish_prompt`/`fish_preexec`); the same four markers (`A` prompt
 start, `B` prompt end, `C` command start, `D` command end with exit code)
 plus OSC 7 are what JFTerm consumes.
 
+## MCP server (Claude Code integration)
+
+JFTerm exposes a small MCP server at `http://127.0.0.1:7820/mcp` so Claude
+Code (or any MCP client) running inside a tab can drive JFTerm. Connect
+Claude Code with:
+
+    claude mcp add --transport http jfterm http://127.0.0.1:7820/mcp
+
+Tools available in this MVP:
+
+- `list_projects_tool` — projects with name, directory, and tab count.
+- `list_tabs_tool(project_name?)` — all tabs, or filtered to one project.
+- `spawn_tab_tool(project_name, command)` — spawn a tab running `command`.
+- `restart_tab_tool(id)` — restart a tab spawned with a startup command.
+
+The server binds to localhost only and has no authentication. A
+preferences UI to enable/disable it and pick a port is on the roadmap;
+see issue #20.
+
 ## Development
 
 Common dev tasks are wrapped as [`just`](https://github.com/casey/just)
