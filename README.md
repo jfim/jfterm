@@ -45,18 +45,6 @@ file under `~/.local/share/applications/`, the icon under
 `~/.local/share/icons/hicolor/scalable/apps/`, and an isolated venv at
 `~/.local/share/jfterm/venv`. `just uninstall` reverses everything.
 
-## Status dot
-
-Each tab row has a status dot with two visual axes:
-
-**Color — running state:**
-- **Blue:** a foreground subprocess is running in the tab's shell.
-- **Grey:** the shell is at its prompt.
-
-**Fill — in-place state** (*filled = tab is in the right home; outline = the tab could be moved*; clicking the dot opens a "Move To" menu):
-- Tab in a **project:** filled if the cwd is inside the project's directory, outline otherwise.
-- Tab in **Unsorted:** filled if the cwd matches no project, outline if it's inside some project's directory.
-
 ## Shell integration (OSC 7 + OSC 133)
 
 JFTerm tracks each tab's cwd and "is a command running?" state from your
