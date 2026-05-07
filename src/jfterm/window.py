@@ -122,6 +122,15 @@ class JFTermWindow(Adw.ApplicationWindow):
             app.set_accels_for_action("win.next-tab", ["<Control>Page_Down"])
             app.set_accels_for_action("win.prev-tab", ["<Control>Page_Up"])
 
+        # Embedded MCP server. See docs/superpowers/specs/2026-05-06-mcp-server-design.md.
+        # Hardcoded to 127.0.0.1:7820 for MVP; prefs UI is a follow-up.
+        from jfterm.mcp_gtk import GtkMCPController
+        from jfterm.mcp_server import MCPServerThread
+
+        self._mcp_controller = GtkMCPController(self)
+        self._mcp_server = MCPServerThread(self._mcp_controller)
+        self._mcp_server.start()
+
     # --- handlers ---
 
     def _on_tab_activated(self, _sb, tab: Tab) -> None:
