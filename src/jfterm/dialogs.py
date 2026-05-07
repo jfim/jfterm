@@ -5,11 +5,23 @@ from pathlib import Path
 
 from gi.repository import Adw, Gdk, GObject, Gtk
 
-from jfterm.models import StartupCommand
+from jfterm.models import FlashCommand, StartupCommand
 
 
 class _RowRef(GObject.Object):
     """Carrier so a startup-command row can travel through GValue DnD."""
+
+    def __init__(self, row: Gtk.Widget) -> None:
+        super().__init__()
+        self.row = row
+
+
+class _FlashRowRef(GObject.Object):
+    """Carrier so a flash-command row can travel through GValue DnD.
+
+    Distinct from _RowRef so dragging a startup row can't drop into the
+    flash list (different GType).
+    """
 
     def __init__(self, row: Gtk.Widget) -> None:
         super().__init__()
@@ -24,7 +36,10 @@ def show_project_dialog(
     initial_directory: str = "",
     initial_commands: list[StartupCommand] | None = None,
     initial_spawn_blank_after_startup: bool = False,
-    on_save: Callable[[str, str, list[StartupCommand], bool], None],
+    initial_flash_commands: list[FlashCommand] | None = None,
+    on_save: Callable[
+        [str, str, list[StartupCommand], bool, list[FlashCommand]], None
+    ],
     on_disband: Callable[[], None] | None = None,
 ) -> None:
     dlg = Adw.Window(transient_for=parent, modal=True, title=title, default_width=480)
@@ -184,6 +199,135 @@ def show_project_dialog(
     add_cmd_btn.add_css_class("flat")
     add_cmd_btn.connect("clicked", lambda _b: _add_command_row())
 
+    # --- flash commands editor ---
+
+    flash_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+    flash_handle_spacer = Gtk.Image.new_from_icon_name("open-menu-symbolic")
+    flash_handle_spacer.set_opacity(0)
+    flash_name_header = Gtk.Label(label="Name", xalign=0)
+    flash_name_header.add_css_class("dim-label")
+    flash_name_header.set_width_chars(14)
+    flash_cmd_header = Gtk.Label(label="Command", xalign=0)
+    flash_cmd_header.add_css_class("dim-label")
+    flash_cmd_header.set_hexpand(True)
+    flash_keep_header = Gtk.Label(label="Keep open\non exit 0", xalign=0)
+    flash_keep_header.add_css_class("dim-label")
+    flash_focus_header = Gtk.Label(label="Focus", xalign=0)
+    flash_focus_header.add_css_class("dim-label")
+    flash_delete_spacer = Gtk.Image.new_from_icon_name("user-trash-symbolic")
+    flash_delete_spacer.set_opacity(0)
+    for w in (
+        flash_handle_spacer,
+        flash_name_header,
+        flash_cmd_header,
+        flash_keep_header,
+        flash_focus_header,
+        flash_delete_spacer,
+    ):
+        flash_header.append(w)
+
+    flash_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+    flash_rows: list[
+        tuple[Gtk.Box, Gtk.Entry, Gtk.Entry, Gtk.CheckButton, Gtk.CheckButton]
+    ] = []
+
+    def _move_flash_row(src_row: Gtk.Box, dst_row: Gtk.Box) -> None:
+        if src_row is dst_row:
+            return
+        src_idx = next((i for i, t in enumerate(flash_rows) if t[0] is src_row), None)
+        dst_idx = next((i for i, t in enumerate(flash_rows) if t[0] is dst_row), None)
+        if src_idx is None or dst_idx is None:
+            return
+        item = flash_rows.pop(src_idx)
+        new_dst = next(i for i, t in enumerate(flash_rows) if t[0] is dst_row)
+        flash_rows.insert(new_dst, item)
+        for r, *_ in flash_rows:
+            flash_box.remove(r)
+        for r, *_ in flash_rows:
+            flash_box.append(r)
+
+    def _add_flash_row(
+        initial_name: str = "",
+        initial_command: str = "",
+        initial_keep_open: bool = False,
+        initial_focus: bool = True,
+    ) -> None:
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+
+        handle = Gtk.Image.new_from_icon_name("open-menu-symbolic")
+        handle.add_css_class("dim-label")
+        handle.set_tooltip_text("Drag to reorder")
+        handle.set_cursor(Gdk.Cursor.new_from_name("grab", None))
+
+        name_entry = Gtk.Entry(placeholder_text="e.g. Git push")
+        name_entry.set_text(initial_name)
+        name_entry.set_width_chars(14)
+
+        cmd_entry = Gtk.Entry(placeholder_text="e.g. git push")
+        cmd_entry.set_text(initial_command)
+        cmd_entry.set_hexpand(True)
+
+        keep_check = Gtk.CheckButton()
+        keep_check.set_active(initial_keep_open)
+        keep_check.set_tooltip_text("Don't auto-close the tab when the command exits 0")
+
+        focus_check = Gtk.CheckButton()
+        focus_check.set_active(initial_focus)
+        focus_check.set_tooltip_text("Switch to the tab when launching the command")
+
+        delete = Gtk.Button.new_from_icon_name("user-trash-symbolic")
+        delete.add_css_class("flat")
+        delete.set_tooltip_text("Remove flash command")
+
+        def _on_delete(_b, r=row):
+            flash_box.remove(r)
+            for i, t in enumerate(flash_rows):
+                if t[0] is r:
+                    flash_rows.pop(i)
+                    break
+
+        delete.connect("clicked", _on_delete)
+
+        src = Gtk.DragSource()
+        src.set_actions(Gdk.DragAction.MOVE)
+
+        def _prepare(_s, _x, _y, r=row):
+            v = GObject.Value()
+            v.init(_FlashRowRef.__gtype__)
+            v.set_object(_FlashRowRef(r))
+            return Gdk.ContentProvider.new_for_value(v)
+
+        def _drag_begin(s, _drag, r=row):
+            s.set_icon(Gtk.WidgetPaintable.new(r), 0, 0)
+
+        src.connect("prepare", _prepare)
+        src.connect("drag-begin", _drag_begin)
+        handle.add_controller(src)
+
+        target = Gtk.DropTarget.new(_FlashRowRef.__gtype__, Gdk.DragAction.MOVE)
+
+        def _on_drop(_t, value, _x, _y, dst=row):
+            src_row = value.row if isinstance(value, _FlashRowRef) else None
+            if src_row is None:
+                return False
+            _move_flash_row(src_row, dst)
+            return True
+
+        target.connect("drop", _on_drop)
+        row.add_controller(target)
+
+        for w in (handle, name_entry, cmd_entry, keep_check, focus_check, delete):
+            row.append(w)
+        flash_box.append(row)
+        flash_rows.append((row, name_entry, cmd_entry, keep_check, focus_check))
+
+    for fc in initial_flash_commands or []:
+        _add_flash_row(fc.name, fc.command, fc.keep_open_on_success, fc.focus_on_launch)
+
+    add_flash_btn = Gtk.Button(label="Add flash command")
+    add_flash_btn.add_css_class("flat")
+    add_flash_btn.connect("clicked", lambda _b: _add_flash_row())
+
     spawn_blank_check = Gtk.CheckButton(label="Spawn blank terminal after startup")
     spawn_blank_check.set_active(initial_spawn_blank_after_startup)
 
@@ -205,7 +349,17 @@ def show_project_dialog(
             for _row, entry, delay_w in command_rows
             if (text := entry.get_text().strip())
         ]
-        on_save(name, directory, commands, spawn_blank_check.get_active())
+        flash = [
+            FlashCommand(
+                name=fname,
+                command=fcmd,
+                keep_open_on_success=keep_w.get_active(),
+                focus_on_launch=focus_w.get_active(),
+            )
+            for _row, name_w, cmd_w, keep_w, focus_w in flash_rows
+            if (fname := name_w.get_text().strip()) and (fcmd := cmd_w.get_text().strip())
+        ]
+        on_save(name, directory, commands, spawn_blank_check.get_active(), flash)
         dlg.close()
 
     save_btn.connect("clicked", _on_save_clicked)
@@ -236,6 +390,10 @@ def show_project_dialog(
         commands_header,
         commands_box,
         add_cmd_btn,
+        Gtk.Label(label="Flash commands", xalign=0),
+        flash_header,
+        flash_box,
+        add_flash_btn,
         spawn_blank_check,
         actions,
     ):
