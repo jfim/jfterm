@@ -64,6 +64,7 @@ def test_reorder_tab_within_group():
 
 def test_tab_has_launched_command_and_is_restarting_defaults():
     from jfterm.models import Tab
+
     t = Tab(title="x")
     assert t.launched_command is None
     assert t.is_restarting is False

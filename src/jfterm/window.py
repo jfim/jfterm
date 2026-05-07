@@ -139,9 +139,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         terminal.connect(
             "running-changed",
             lambda _t, running, t=tab, term=terminal: (
-                self._on_tab_running_changed(t, running)
-                if t.terminal is term
-                else None
+                self._on_tab_running_changed(t, running) if t.terminal is term else None
             ),
         )
         terminal.connect(
@@ -197,8 +195,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         cwd = group.directory if isinstance(group, Project) else None
         command = tab.launched_command
         was_visible = (
-            tab.terminal is not None
-            and self.terminal_stack.get_visible_child() is tab.terminal
+            tab.terminal is not None and self.terminal_stack.get_visible_child() is tab.terminal
         )
         old_terminal = tab.terminal
         old_pid = old_terminal.shell_pid if old_terminal is not None else None
