@@ -809,7 +809,7 @@ class JFTermWindow(Adw.ApplicationWindow):
 
         def _move(dest: Group) -> None:
             self.ws.move_tab(tab, dest)
-            if tab.terminal is not None and self.terminal_stack.get_visible_child() is tab.terminal:
+            if tab.widget is not None and self.terminal_stack.get_visible_child() is tab.widget:
                 self._current_group = dest
             self._refresh_tab_dot(tab)
             self.sidebar.refresh()
@@ -829,7 +829,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.ws.move_tab(tab, dest_group, position=adjusted)
         if tab.widget is not None and self.terminal_stack.get_visible_child() is tab.widget:
             self._current_group = dest_group
-        if isinstance(tab, TerminalTab):
+        if isinstance(tab, (TerminalTab, LinkedTab)):
             self._refresh_tab_dot(tab)
         self.sidebar.refresh()
 
