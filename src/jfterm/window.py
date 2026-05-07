@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import os
 import signal
+from typing import Any
 
 import gi
 
@@ -19,6 +20,7 @@ from jfterm.models import (  # noqa: E402
     StartupCommand,
     Tab,
     TerminalTab,
+    WebTab,
     Workspace,
 )
 from jfterm.persistence import default_path, load_projects, save_projects  # noqa: E402
@@ -81,6 +83,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         # Wire sidebar signals
         self.sidebar.connect("tab-activated", self._on_tab_activated)
         self.sidebar.connect("new-tab-requested", self._on_new_tab)
+        self.sidebar.connect("new-web-tab-requested", self._on_new_web_tab)
         self.sidebar.connect("close-tab-requested", self._on_close_tab)
         self.sidebar.connect("restart-tab-requested", self._on_restart_tab)
         self.sidebar.connect("new-project-requested", self._on_new_project)
@@ -118,12 +121,12 @@ class JFTermWindow(Adw.ApplicationWindow):
 
     # --- handlers ---
 
-    def _on_tab_activated(self, _sb, tab: TerminalTab) -> None:
-        if tab.terminal is not None:
+    def _on_tab_activated(self, _sb, tab: Tab) -> None:
+        if tab.widget is not None:
             self._current_group = self.ws._find_group(tab)
-            self.terminal_stack.set_visible_child(tab.terminal)
+            self.terminal_stack.set_visible_child(tab.widget)
             self.sidebar.set_active_tab(tab)
-            tab.terminal.grab_focus()
+            tab.widget.grab_focus()
 
     def _on_new_tab(self, _sb, group: Group) -> None:
         self._spawn_tab(group)
@@ -191,18 +194,96 @@ class JFTermWindow(Adw.ApplicationWindow):
             ),
         )
 
-    def _on_close_tab(self, _sb, tab: TerminalTab) -> None:
-        if tab.is_restarting:
+    def _on_new_web_tab(self, _sb, group: Group, url: str) -> None:
+        if url:
+            self._spawn_web_tab(group, url=url)
+            return
+        from jfterm.dialogs import show_new_web_tab_dialog
+
+        def _confirm(submitted: str) -> None:
+            self._spawn_web_tab(group, url=submitted)
+
+        show_new_web_tab_dialog(self, on_confirm=_confirm)
+
+    def _spawn_web_tab(
+        self,
+        group: Group,
+        *,
+        url: str,
+        focus: bool = True,
+        from_startup: bool = False,
+        flash_name: str | None = None,
+    ) -> WebTab:
+        from jfterm.webtab import JFTermWebView
+
+        web_view = JFTermWebView(url=url)
+        web_view.set_vexpand(True)
+        web_view.set_hexpand(True)
+
+        if flash_name is not None:
+            initial_title = f"⚡ {flash_name}"
+        elif from_startup:
+            initial_title = f"▶ {url}"
+        else:
+            initial_title = url
+        tab = WebTab(
+            title=initial_title,
+            url=url,
+            web_view=web_view,
+            from_startup=from_startup,
+            flash_name=flash_name,
+        )
+        self._wire_web_view(tab, web_view)
+        self.terminal_stack.add_child(web_view)
+        group.add_tab(tab)
+        self._current_group = group
+        if focus:
+            self.terminal_stack.set_visible_child(web_view)
+            self.sidebar.set_active_tab(tab)
+            web_view.grab_focus()
+        self.sidebar.refresh()
+        return tab
+
+    def _wire_web_view(self, tab: WebTab, web_view: Any) -> None:
+        web_view.connect(
+            "title-changed",
+            lambda _w, title, t=tab, wv=web_view: (
+                self._on_web_tab_title_changed(t, title) if t.web_view is wv else None
+            ),
+        )
+        web_view.connect(
+            "url-changed",
+            lambda _w, url, t=tab, wv=web_view: (
+                self._on_web_tab_url_changed(t, url) if t.web_view is wv else None
+            ),
+        )
+
+    def _on_web_tab_title_changed(self, tab: WebTab, title: str) -> None:
+        base = title or tab.url
+        if tab.flash_name is not None:
+            tab.title = f"⚡ {tab.flash_name}: {base}" if title else f"⚡ {tab.flash_name}"
+        elif tab.from_startup:
+            tab.title = f"▶ {base}"
+        else:
+            tab.title = base
+        self.sidebar.refresh()
+
+    def _on_web_tab_url_changed(self, tab: WebTab, url: str) -> None:
+        if url:
+            tab.url = url
+
+    def _on_close_tab(self, _sb, tab: Tab) -> None:
+        if isinstance(tab, TerminalTab) and tab.is_restarting:
             return
         group = self.ws._find_group(tab)
         was_visible = (
-            tab.terminal is not None and self.terminal_stack.get_visible_child() is tab.terminal
+            tab.widget is not None and self.terminal_stack.get_visible_child() is tab.widget
         )
         # Capture next-tab-in-group BEFORE removing.
         idx = group.tabs.index(tab)
         group.remove_tab(tab)
-        if tab.terminal is not None:
-            self.terminal_stack.remove(tab.terminal)
+        if tab.widget is not None:
+            self.terminal_stack.remove(tab.widget)
         self.sidebar.refresh()
 
         if not was_visible:
@@ -217,9 +298,9 @@ class JFTermWindow(Adw.ApplicationWindow):
             self._current_group = group
             promoted = group.tabs[new_idx]
             self.sidebar.set_active_tab(promoted)
-            if isinstance(promoted, TerminalTab) and promoted.terminal is not None:
-                self.terminal_stack.set_visible_child(promoted.terminal)
-                promoted.terminal.grab_focus()
+            if promoted.widget is not None:
+                self.terminal_stack.set_visible_child(promoted.widget)
+                promoted.widget.grab_focus()
         else:
             self._show_group_empty(group)
 
@@ -467,7 +548,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         pop.set_parent(anchor)
         pop.popup()
 
-    def _on_tab_dropped(self, _sb, tab: TerminalTab, dest_group: Group, position: int) -> None:
+    def _on_tab_dropped(self, _sb, tab: Tab, dest_group: Group, position: int) -> None:
         # Within-group + drop below source: removing first shifts indices.
         src_group = self.ws._find_group(tab)
         adjusted = position
@@ -476,9 +557,10 @@ class JFTermWindow(Adw.ApplicationWindow):
             if src_idx < position:
                 adjusted -= 1
         self.ws.move_tab(tab, dest_group, position=adjusted)
-        if tab.terminal is not None and self.terminal_stack.get_visible_child() is tab.terminal:
+        if tab.widget is not None and self.terminal_stack.get_visible_child() is tab.widget:
             self._current_group = dest_group
-        self._refresh_tab_dot(tab)
+        if isinstance(tab, TerminalTab):
+            self._refresh_tab_dot(tab)
         self.sidebar.refresh()
 
     def _on_tab_cwd_changed(self, tab: TerminalTab, path: str) -> None:
@@ -547,11 +629,11 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _shortcut_prev_tab(self) -> None:
         self._cycle_tab(-1)
 
-    def _current_tab(self) -> TerminalTab | None:
+    def _current_tab(self) -> Tab | None:
         visible = self.terminal_stack.get_visible_child()
         for g in self.ws.all_groups():
             for t in g.tabs:
-                if isinstance(t, TerminalTab) and t.terminal is visible:
+                if t.widget is visible:
                     return t
         return None
 
@@ -562,11 +644,11 @@ class JFTermWindow(Adw.ApplicationWindow):
         cur = self._current_tab()
         idx = flat.index(cur) if cur in flat else -1
         nxt = flat[(idx + delta) % len(flat)]
-        if isinstance(nxt, TerminalTab) and nxt.terminal is not None:
+        if nxt.widget is not None:
             self._current_group = self.ws._find_group(nxt)
-            self.terminal_stack.set_visible_child(nxt.terminal)
+            self.terminal_stack.set_visible_child(nxt.widget)
             self.sidebar.set_active_tab(nxt)
-            nxt.terminal.grab_focus()
+            nxt.widget.grab_focus()
 
     def _on_sidebar_toggled(self, btn: Gtk.ToggleButton) -> None:
         visible = btn.get_active()
