@@ -98,7 +98,8 @@ startup commands list, with these per-row controls:
 - **Command** entry (text)
 - **Keep open on exit 0** checkbox
 - **Focus tab when launching** checkbox
-- Up / Down / Delete buttons (reuse the existing reorder pattern)
+- Drag handle (grippy) for reorder + Delete button — reuse the existing
+  drag-and-drop reorder pattern from the startup commands list
 
 An "Add flash command" button appends a new row with defaults
 (`keep_open_on_success=False`, `focus_on_launch=True`, empty name/command).
