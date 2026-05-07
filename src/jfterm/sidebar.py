@@ -318,6 +318,7 @@ class Sidebar(Gtk.ScrolledWindow):
 
         close = Gtk.Button.new_from_icon_name("window-close-symbolic")
         close.add_css_class("flat")
+        close.set_tooltip_text("Close tab")
         close.connect("clicked", lambda _b, t=tab: self.emit("close-tab-requested", t))
 
         # DnD: the row is both a drag source (carrying the tab) and a drop
