@@ -1029,7 +1029,19 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _on_preferences(self, _action, _param) -> None:
         dialog = AppPreferencesDialog(self._settings)
         dialog.connect("changed", self._on_settings_changed)
+        dialog.connect("closed", self._on_preferences_closed)
         dialog.present(self)
+
+    def _on_preferences_closed(self, _dialog) -> None:
+        # Adw.PreferencesDialog leaves the parent window with no focused
+        # descendant on dismiss, which breaks both the capture-phase key
+        # controller and app-level accelerator dispatch until the user
+        # clicks something. Restore focus to the visible terminal widget,
+        # falling back to the first focusable widget in the window when
+        # the empty-state placeholder (a non-focusable Label) is showing.
+        visible = self.terminal_stack.get_visible_child()
+        if visible is None or not visible.grab_focus():
+            self.child_focus(Gtk.DirectionType.TAB_FORWARD)
 
     def _on_settings_changed(self, _dialog, settings: AppSettings) -> None:
         # Preferences dialog only edits its own subset of fields; carry the
