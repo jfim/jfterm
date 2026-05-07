@@ -20,6 +20,11 @@ one-click access to each project's setup.
 - Status dot per tab showing whether the shell is busy and whether the cwd
   matches the tab's project.
 - Drag-and-drop to move tabs between projects.
+- Web tabs: any startup or flash command starting with `http://` or
+  `https://` opens a WebKitGTK mini-browser (back/forward/reload + URL
+  bar) in place of a shell. Right-click a group's `+` button for an
+  ad-hoc "New web tab…" prompt. Cookies and localStorage persist across
+  tabs and JFTerm restarts under `~/.local/share/jfterm/webkit/`.
 - Built on GTK 4 / libadwaita with VTE 3.91 for the terminal itself.
 
 ## Running
@@ -28,6 +33,7 @@ System libraries (Ubuntu 24.04 — adjust package names for other distros):
 
     sudo apt install \
         gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-vte-3.91 \
+        gir1.2-webkit-6.0 \
         libvte-2.91-gtk4-0 \
         python3-gi python3-cairo
 
