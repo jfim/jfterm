@@ -121,6 +121,7 @@ Tools available in this MVP:
 - `list_tabs_tool(project_name?)` — all tabs, or filtered to one project.
 - `spawn_tab_tool(project_name, command)` — spawn a tab running `command`.
 - `restart_tab_tool(id)` — restart a tab spawned with a startup command.
+- `focus_tab_tool(id)` — switch to a tab and bring its input to the foreground.
 
 The server binds to localhost only and has no authentication. A
 preferences UI to enable/disable it and pick a port is on the roadmap;

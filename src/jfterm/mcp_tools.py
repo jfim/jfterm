@@ -49,3 +49,12 @@ class RestartTabInput(BaseModel):
 async def restart_tab(controller: MCPController, params: RestartTabInput) -> dict:
     tab = controller.restart_tab(params.id)
     return {"tab": asdict(tab)}
+
+
+class FocusTabInput(BaseModel):
+    id: str
+
+
+async def focus_tab(controller: MCPController, params: FocusTabInput) -> dict:
+    tab = controller.focus_tab(params.id)
+    return {"tab": asdict(tab)}
