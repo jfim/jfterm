@@ -167,3 +167,70 @@ def test_base_tab_widget_raises():
     t = Tab(title="x")
     with pytest.raises(NotImplementedError):
         _ = t.widget
+
+
+def test_move_project_reorders_active_projects():
+    ws = Workspace()
+    a = ws.add_project(name="A", directory="/tmp/a")
+    b = ws.add_project(name="B", directory="/tmp/b")
+    c = ws.add_project(name="C", directory="/tmp/c")
+
+    ws.move_project(c, 0)
+
+    assert [p.name for p in ws.active_projects] == ["C", "A", "B"]
+
+
+def test_move_project_preserves_archived_positions():
+    ws = Workspace()
+    a = ws.add_project(name="A", directory="/tmp/a")
+    z = ws.add_project(name="Z", directory="/tmp/z")
+    z.archived = True
+    b = ws.add_project(name="B", directory="/tmp/b")
+    c = ws.add_project(name="C", directory="/tmp/c")
+
+    ws.move_project(c, 0)
+
+    assert [p.name for p in ws.active_projects] == ["C", "A", "B"]
+    assert [p.name for p in ws.archived_projects] == ["Z"]
+    assert [p.name for p in ws.projects] == ["C", "A", "Z", "B"]
+
+
+def test_move_project_to_end_appends():
+    ws = Workspace()
+    a = ws.add_project(name="A", directory="/tmp/a")
+    b = ws.add_project(name="B", directory="/tmp/b")
+    c = ws.add_project(name="C", directory="/tmp/c")
+
+    ws.move_project(a, 2)
+
+    assert [p.name for p in ws.active_projects] == ["B", "C", "A"]
+
+
+def test_move_project_to_same_position_is_noop():
+    ws = Workspace()
+    a = ws.add_project(name="A", directory="/tmp/a")
+    b = ws.add_project(name="B", directory="/tmp/b")
+
+    ws.move_project(a, 0)
+
+    assert [p.name for p in ws.active_projects] == ["A", "B"]
+
+
+def test_move_project_rejects_archived_project():
+    ws = Workspace()
+    a = ws.add_project(name="A", directory="/tmp/a")
+    a.archived = True
+
+    with pytest.raises(ValueError):
+        ws.move_project(a, 0)
+
+
+def test_move_project_rejects_out_of_range_position():
+    ws = Workspace()
+    a = ws.add_project(name="A", directory="/tmp/a")
+    b = ws.add_project(name="B", directory="/tmp/b")
+
+    with pytest.raises(ValueError):
+        ws.move_project(a, 5)
+    with pytest.raises(ValueError):
+        ws.move_project(a, -1)

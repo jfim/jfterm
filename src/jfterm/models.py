@@ -166,6 +166,26 @@ class Workspace:
         src.remove_tab(tab)
         dest.add_tab(tab, position=position)
 
+    def move_project(self, project: Project, position: int) -> None:
+        if project.archived:
+            raise ValueError("cannot move an archived project")
+        active = self.active_projects
+        if project not in active:
+            raise ValueError(f"project {project!r} is not in this workspace")
+        if position < 0 or position >= len(active):
+            raise ValueError(
+                f"position {position} out of range 0..{len(active) - 1}"
+            )
+
+        self.projects.remove(project)
+        active_after = [p for p in self.projects if not p.archived]
+        if position == len(active_after):
+            self.projects.append(project)
+            return
+        anchor = active_after[position]
+        anchor_idx = self.projects.index(anchor)
+        self.projects.insert(anchor_idx, project)
+
     def _find_group(self, tab: Tab) -> Group:
         for g in (*self.projects, self.unsorted):
             if tab in g.tabs:
