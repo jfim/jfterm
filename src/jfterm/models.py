@@ -15,6 +15,16 @@ class StartupCommand:
 
 
 @dataclass
+class FlashCommand:
+    """A one-shot command launched from the project's flash menu."""
+
+    name: str
+    command: str
+    keep_open_on_success: bool = False
+    focus_on_launch: bool = True
+
+
+@dataclass
 class Tab:
     title: str = ""
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
@@ -68,6 +78,7 @@ class Project(Group):
         id: str | None = None,
         startup_commands: list[StartupCommand] | None = None,
         spawn_blank_after_startup: bool = False,
+        flash_commands: list[FlashCommand] | None = None,
     ) -> None:
         super().__init__()
         self.name = name
@@ -76,6 +87,7 @@ class Project(Group):
         self.id = id if id is not None else uuid.uuid4().hex
         self.startup_commands: list[StartupCommand] = list(startup_commands or [])
         self.spawn_blank_after_startup = spawn_blank_after_startup
+        self.flash_commands: list[FlashCommand] = list(flash_commands or [])
         # Forward-compat: unknown fields read from disk are preserved here
         # and re-emitted on save so older code doesn't drop newer schema keys.
         self._extra: dict[str, Any] = {}
