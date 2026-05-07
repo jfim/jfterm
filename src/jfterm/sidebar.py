@@ -500,7 +500,50 @@ class Sidebar(Gtk.ScrolledWindow):
 
         row.append(name_label)
         row.append(unarchive)
+
+        gesture = Gtk.GestureClick()
+        gesture.set_button(Gdk.BUTTON_SECONDARY)
+        gesture.connect(
+            "pressed",
+            lambda g, _n, x, y, p=project, r=row: self._show_archived_context_menu(r, p, x, y),
+        )
+        row.add_controller(gesture)
+
         self._box.append(row)
+
+    def _show_archived_context_menu(
+        self, anchor: Gtk.Widget, project: Project, x: float, y: float
+    ) -> None:
+        pop = Gtk.Popover()
+        pop.set_has_arrow(False)
+        pop.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        box.set_margin_start(4)
+        box.set_margin_end(4)
+        box.set_margin_top(4)
+        box.set_margin_bottom(4)
+
+        def _item(label: str, signal: str) -> Gtk.Button:
+            btn = Gtk.Button(label=label)
+            btn.add_css_class("flat")
+            btn.set_halign(Gtk.Align.FILL)
+            btn.set_hexpand(True)
+
+            def _cb(_b):
+                pop.popdown()
+                self.emit(signal, project)
+
+            btn.connect("clicked", _cb)
+            return btn
+
+        box.append(_item("Unarchive", "unarchive-project-requested"))
+        box.append(_item("Delete", "delete-project-requested"))
+        box.append(_item("Settings", "configure-project-requested"))
+
+        pop.set_child(box)
+        pop.set_parent(anchor)
+        pop.popup()
 
     def _add_tab_row(self, group: Group, tab: Tab) -> None:
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
