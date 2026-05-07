@@ -250,6 +250,7 @@ class JFTermWindow(Adw.ApplicationWindow):
 
         # Swap in a fresh terminal for the same tab.
         if old_terminal is not None:
+            old_terminal._proxy.close()  # break GLib closure ref before GTK dispose
             self.terminal_stack.remove(old_terminal)
 
         new_terminal = JFTermTerminal(cwd=cwd, send_after_spawn=command)

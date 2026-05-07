@@ -2,6 +2,7 @@ import contextlib
 import fcntl
 import os
 import pty
+import signal
 import struct
 import termios
 
@@ -112,12 +113,17 @@ class PtyProxy(GObject.Object):
             fcntl.ioctl(self._master_fd, termios.TIOCSWINSZ, winsize)
 
     def close(self) -> None:
+        # Idempotent: a second call is a no-op once everything is cleaned up.
         if self._fd_watch is not None:
             GLib.source_remove(self._fd_watch)
             self._fd_watch = None
         if self._child_watch is not None:
             GLib.source_remove(self._child_watch)
             self._child_watch = None
+        if self._child_pid is not None:
+            with contextlib.suppress(ProcessLookupError, OSError):
+                os.kill(self._child_pid, signal.SIGHUP)
+            self._child_pid = None
         if self._master_fd is not None:
             with contextlib.suppress(OSError):
                 os.close(self._master_fd)
