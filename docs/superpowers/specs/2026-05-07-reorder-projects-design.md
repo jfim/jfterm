@@ -16,6 +16,11 @@ another active project row inserts it above that row; dropping it on an
 end-of-list sentinel appends it to the active block. Order is persisted
 immediately, mirroring the existing tab drag-and-drop behavior.
 
+In addition, project header rows accept **tab** drops — interpreted as
+"append the tab to this project". This closes a pre-existing gap: collapsed
+projects render no tab rows or end-sentinel, so there is currently no way
+to move a tab into a collapsed project.
+
 Archived projects and the Unsorted singleton are not part of the reorder.
 
 ## Data model
@@ -58,8 +63,13 @@ default_path())` after each successful drop.
   - tab drops do not land on project header rows or the project end-sentinel,
   - project drops do not land on tab rows or per-project tab end-sentinels.
 - In `_add_project_row` (active path only): attach drag source on the row,
-  attach drop target with `position_callable = lambda i=index_in_active: i`
-  ("drop above this project").
+  attach a project drop target with
+  `position_callable = lambda i=index_in_active: i` ("drop above this
+  project"), and additionally attach a **tab** drop target on the same row
+  with `position_callable = lambda p=project: len(p.tabs)` ("append to this
+  project's tab list"). The tab drop target reuses the existing
+  `_attach_drop` helper and emits the existing `tab-dropped` signal — no new
+  signal is needed.
 - After the last active project row, add a project-level end sentinel
   (analogous to `_add_drop_sentinel` for tabs) with
   `position_callable = lambda: len(ws.active_projects)`.
@@ -87,8 +97,12 @@ default_path())` after each successful drop.
   identical, save and refresh still happen. Cheap and avoids special cases.
 - **Project drag onto a tab row**: drop target rejects the payload (different
   GType); nothing happens.
-- **Tab drag onto a project header**: rejected likewise; existing tab DnD
-  semantics preserved.
+- **Tab drag onto a project header**: accepted as "append to this project's
+  tab list". This is the only way to move a tab into a **collapsed**
+  project, since collapsed projects render no tab rows or end-sentinel.
+  Dropping a tab on its own project's header is a no-op append (already in
+  that project) — handled by the existing same-group adjustment in
+  `_on_tab_dropped`.
 - **Archived projects**: not draggable; not drop targets. The Archived
   section's internal order is not user-controlled.
 - **Single active project**: drag still works mechanically but every drop is
@@ -106,6 +120,10 @@ default_path())` after each successful drop.
     untouched.
   - Calling `move_project` on an archived project raises `ValueError`.
   - Edge positions: `position=0` and `position=len(active_projects)`.
+- Tab-drop-on-project-header behavior:
+  - Dropping a tab from project A onto project B's header row appends it
+    to B's tab list (whether B is expanded or collapsed).
+  - Dropping a tab onto its own project's header is a no-op.
 - Handler-level test for `_on_project_dropped`:
   - Drag-down adjustment: starting from `[A, B, C]`, dropping `A` at
     `position=2` results in `[B, A, C]` (the same logic the tab handler
