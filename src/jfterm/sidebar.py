@@ -151,7 +151,7 @@ class Sidebar(Gtk.ScrolledWindow):
         )
 
         flash = Gtk.MenuButton()
-        flash.set_icon_name("weather-storm-symbolic")
+        flash.set_icon_name("thunderbolt-symbolic")
         flash.add_css_class("flat")
         flash.set_tooltip_text("Flash commands")
         flash.set_sensitive(bool(project.flash_commands))
