@@ -1,4 +1,4 @@
-from jfterm.osc_scanner import OscScanner, ProgressEvent
+from jfterm.osc_scanner import OscScanner, ProgressEvent, PromptEvent
 
 
 def test_passthrough_plain_text():
@@ -71,7 +71,7 @@ def test_multiple_sequences_in_one_chunk():
 
 def test_unknown_osc_passes_through_unchanged():
     scanner = OscScanner()
-    raw = b"\x1b]133;A\x1b\\"
+    raw = b"\x1b]7;file:///tmp\x1b\\"  # use OSC 7 instead of 133
     out, events = scanner.feed(raw)
     assert out == raw
     assert events == []
@@ -121,3 +121,56 @@ def test_runaway_sequence_flushes_introducer_and_recovers():
     out2, ev2 = scanner.feed(b"\x1b]9;4;1;5\x1b\\")
     assert out2 == b""
     assert ev2 == [ProgressEvent(state=1, value=5)]
+
+
+# --- OSC 133 prompt marker tests ---
+
+
+def test_osc_133_a_emits_prompt_event_and_passes_through():
+    scanner = OscScanner()
+    out, events = scanner.feed(b"\x1b]133;A\x1b\\")
+    assert out == b"\x1b]133;A\x1b\\"  # NOT stripped
+    assert events == [PromptEvent(kind="A")]
+
+
+def test_osc_133_c_command_started():
+    scanner = OscScanner()
+    _, events = scanner.feed(b"\x1b]133;C\x1b\\")
+    assert events == [PromptEvent(kind="C")]
+
+
+def test_osc_133_d_with_exit_status():
+    scanner = OscScanner()
+    _, events = scanner.feed(b"\x1b]133;D;0\x1b\\")
+    assert events == [PromptEvent(kind="D", exit_status=0)]
+
+
+def test_osc_133_d_without_exit_status():
+    scanner = OscScanner()
+    _, events = scanner.feed(b"\x1b]133;D\x1b\\")
+    assert events == [PromptEvent(kind="D", exit_status=None)]
+
+
+def test_osc_133_b_emitted():
+    scanner = OscScanner()
+    _, events = scanner.feed(b"\x1b]133;B\x1b\\")
+    assert events == [PromptEvent(kind="B")]
+
+
+def test_osc_133_unknown_subtype_ignored():
+    scanner = OscScanner()
+    out, events = scanner.feed(b"\x1b]133;E\x1b\\")
+    assert out == b"\x1b]133;E\x1b\\"
+    assert events == []
+
+
+def test_interleaved_progress_and_prompt_in_order():
+    scanner = OscScanner()
+    data = b"\x1b]133;D;0\x1b\\filler\x1b]9;4;1;25\x1b\\"
+    out, events = scanner.feed(data)
+    # 9;4 stripped, 133 retained.
+    assert out == b"\x1b]133;D;0\x1b\\filler"
+    assert events == [
+        PromptEvent(kind="D", exit_status=0),
+        ProgressEvent(state=1, value=25),
+    ]

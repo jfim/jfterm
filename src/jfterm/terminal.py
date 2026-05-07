@@ -46,17 +46,11 @@ class JFTermTerminal(Vte.Terminal):
         self.connect("commit", self._on_commit)
         self.connect("char-size-changed", self._on_char_size_changed)
 
-        for sig, handler in (
-            ("shell-preexec", self._on_shell_preexec),
-            ("shell-precmd", self._on_shell_precmd),
-        ):
-            with contextlib.suppress(TypeError, ValueError):
-                self.connect(sig, handler)
-
         shell = os.environ.get("SHELL") or "/bin/bash"
         self._proxy = PtyProxy(self._initial_cwd, [shell, "-l"])
         self._proxy.connect("data-ready", self._on_proxy_data)
         self._proxy.connect("progress-changed", self._on_proxy_progress)
+        self._proxy.connect("running-changed", self._on_proxy_running_changed)
         self._proxy.connect("child-exited", self._on_proxy_child_exited)
 
         if self._send_after_spawn is not None:
@@ -132,14 +126,6 @@ class JFTermTerminal(Vte.Terminal):
         title = self.get_window_title() or ""
         self.emit("title-changed", title)
 
-    def _on_shell_preexec(self, _t) -> None:
-        self._osc133_seen = True
-        self.emit("running-changed", True)
-
-    def _on_shell_precmd(self, _t) -> None:
-        self._osc133_seen = True
-        self.emit("running-changed", False)
-
     def _on_commit(self, _t, text: str, _size: int) -> None:
         self._proxy.write(text.encode("utf-8"))
 
@@ -163,6 +149,10 @@ class JFTermTerminal(Vte.Terminal):
 
     def _on_proxy_progress(self, _p, state: int, value: int) -> None:
         self.emit("progress-changed", state, value)
+
+    def _on_proxy_running_changed(self, _p, running: bool) -> None:
+        self._osc133_seen = True
+        self.emit("running-changed", running)
 
     def _on_proxy_child_exited(self, _p, status: int) -> None:
         # VTE has its own child-exited signal; we surface ours through the

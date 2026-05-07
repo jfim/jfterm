@@ -12,9 +12,24 @@ class ProgressEvent:
     value: int
 
 
-class OscScanner:
-    """Scan a byte stream for OSC 9;4 progress sequences.
+@dataclass(frozen=True)
+class PromptEvent:
+    """OSC 133 marker. kind is one of 'A'|'B'|'C'|'D'.
+    exit_status is set only for 'D' when the shell provides one, else None."""
 
+    kind: str
+    exit_status: int | None = None
+
+
+Event = ProgressEvent | PromptEvent
+
+
+class OscScanner:
+    """Scan a byte stream for OSC 9;4 progress sequences and OSC 133 prompt markers.
+
+    OSC 9;4 sequences are stripped from the output (not forwarded to VTE).
+    OSC 133 sequences are passed through to VTE unchanged (it uses them for
+    prompt markers), but also emit PromptEvents for in-process handling.
     All other bytes (plain text, other OSCs, CSI, etc.) are passed through
     unchanged. The hot path is bytes.find() — no per-byte Python loop.
     """
@@ -22,11 +37,11 @@ class OscScanner:
     def __init__(self) -> None:
         self._carry = b""
 
-    def feed(self, chunk: bytes) -> tuple[bytes, list[ProgressEvent]]:
+    def feed(self, chunk: bytes) -> tuple[bytes, list[Event]]:
         data = self._carry + chunk
         self._carry = b""
         out = bytearray()
-        events: list[ProgressEvent] = []
+        events: list[Event] = []
 
         i = 0
         n = len(data)
@@ -60,12 +75,15 @@ class OscScanner:
                 self._carry = data[j:]
                 break
             body = data[j + 2 : term]
-            ev = _try_parse_progress(body)
-            if ev is not None:
-                events.append(ev)
+            progress_ev = _try_parse_progress(body)
+            if progress_ev is not None:
+                events.append(progress_ev)
                 # Drop the entire OSC 9;4 sequence (introducer + body + term).
             else:
-                # Pass other OSCs through unchanged.
+                prompt_ev = _try_parse_prompt(body)
+                if prompt_ev is not None:
+                    events.append(prompt_ev)
+                # Pass OSC through unchanged (both known 133 and unknown OSCs).
                 out += data[j : term + term_len]
             i = term + term_len
 
@@ -101,3 +119,24 @@ def _try_parse_progress(body: bytes) -> ProgressEvent | None:
         except ValueError:
             value = 0
     return ProgressEvent(state=state, value=value)
+
+
+def _try_parse_prompt(body: bytes) -> PromptEvent | None:
+    # Body looks like: 133;<kind>[;<exit_status>]
+    if not body.startswith(b"133;"):
+        return None
+    rest = body[4:]  # everything after "133;"
+    parts = rest.split(b";", 1)
+    if not parts or not parts[0]:
+        return None
+    kind_bytes = parts[0]
+    if len(kind_bytes) != 1 or kind_bytes not in (b"A", b"B", b"C", b"D"):
+        return None
+    kind = kind_bytes.decode()
+    exit_status: int | None = None
+    if kind == "D" and len(parts) == 2 and parts[1]:
+        try:
+            exit_status = int(parts[1])
+        except ValueError:
+            exit_status = None
+    return PromptEvent(kind=kind, exit_status=exit_status)
