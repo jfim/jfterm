@@ -1208,7 +1208,8 @@ class JFTermWindow(Adw.ApplicationWindow):
         # token still ends up in claude's argv during the registration
         # call, which is acceptable for a same-UID dev tool.
         command = (
-            f"claude mcp add --transport http jfterm http://{host}:{port}/mcp "
+            f"claude mcp add --scope user --transport http jfterm "
+            f"http://{host}:{port}/mcp "
             f'--header "Authorization: Bearer $(cat {shlex.quote(token_path)})"'
         )
         self._spawn_tab(self.ws.unsorted, command=command, focus=True)
