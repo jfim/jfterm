@@ -28,9 +28,13 @@ class Sidebar(Gtk.ScrolledWindow):
     Rebuild-from-model strategy: simple and good enough at our scale.
     """
 
+    # new-web-tab-requested(Group, str url): if `url` is empty, the window
+    # should prompt the user for one (via show_new_web_tab_dialog); otherwise
+    # the window should spawn a web tab pointing at that URL directly.
     __gsignals__ = {
         "tab-activated": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "new-tab-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
+        "new-web-tab-requested": (GObject.SignalFlags.RUN_FIRST, None, (object, str)),
         "close-tab-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "restart-tab-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "configure-project-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
@@ -173,6 +177,57 @@ class Sidebar(Gtk.ScrolledWindow):
         sep.set_margin_end(8)
         self._box.append(sep)
 
+    def _attach_plus_right_click(self, plus_btn: Gtk.Widget, group: Group) -> None:
+        """Attach a secondary-click gesture that opens the new-tab kind popover."""
+        gesture = Gtk.GestureClick()
+        gesture.set_button(Gdk.BUTTON_SECONDARY)
+
+        def _on_pressed(_g: Gtk.GestureClick, _n: int, _x: float, _y: float) -> None:
+            self._show_new_tab_popover(plus_btn, group)
+
+        gesture.connect("pressed", _on_pressed)
+        plus_btn.add_controller(gesture)
+
+    def _show_new_tab_popover(self, anchor: Gtk.Widget, group: Group) -> None:
+        from jfterm.webtab import WEBKIT_PACKAGE, is_available
+
+        pop = Gtk.Popover()
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        box.set_margin_start(4)
+        box.set_margin_end(4)
+        box.set_margin_top(4)
+        box.set_margin_bottom(4)
+
+        term_btn = Gtk.Button(label="New terminal tab")
+        term_btn.add_css_class("flat")
+        term_btn.set_halign(Gtk.Align.FILL)
+
+        def _on_term(_b: Gtk.Button, g: Group = group, popover: Gtk.Popover = pop) -> None:
+            popover.popdown()
+            self.emit("new-tab-requested", g)
+
+        term_btn.connect("clicked", _on_term)
+        box.append(term_btn)
+
+        web_btn = Gtk.Button(label="New web tab…")
+        web_btn.add_css_class("flat")
+        web_btn.set_halign(Gtk.Align.FILL)
+        if not is_available():
+            web_btn.set_sensitive(False)
+            web_btn.set_tooltip_text(f"WebKit not available — install {WEBKIT_PACKAGE}")
+        else:
+
+            def _on_web(_b: Gtk.Button, g: Group = group, popover: Gtk.Popover = pop) -> None:
+                popover.popdown()
+                self.emit("new-web-tab-requested", g, "")
+
+            web_btn.connect("clicked", _on_web)
+        box.append(web_btn)
+
+        pop.set_child(box)
+        pop.set_parent(anchor)
+        pop.popup()
+
     def _add_drop_sentinel(self, group: Group) -> None:
         sentinel = Gtk.Box()
         sentinel.set_size_request(-1, 6)
@@ -230,8 +285,9 @@ class Sidebar(Gtk.ScrolledWindow):
 
         plus = Gtk.Button.new_from_icon_name("list-add-symbolic")
         plus.add_css_class("flat")
-        plus.set_tooltip_text("New tab")
+        plus.set_tooltip_text("New tab (right-click for web tab)")
         plus.connect("clicked", lambda _b, p=project: self.emit("new-tab-requested", p))
+        self._attach_plus_right_click(plus, project)
 
         for w in (chevron, label_btn, play, flash, cog, plus):
             row.append(w)
@@ -331,8 +387,9 @@ class Sidebar(Gtk.ScrolledWindow):
 
         plus = Gtk.Button.new_from_icon_name("list-add-symbolic")
         plus.add_css_class("flat")
-        plus.set_tooltip_text("New tab")
+        plus.set_tooltip_text("New tab (right-click for web tab)")
         plus.connect("clicked", lambda _b, g=group: self.emit("new-tab-requested", g))
+        self._attach_plus_right_click(plus, group)
 
         for w in (chevron, label_btn, plus):
             row.append(w)
