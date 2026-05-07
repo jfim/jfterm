@@ -1,7 +1,5 @@
 from jfterm.launcher_items import (
     FlashAction,
-    JumpAction,
-    NewTabAction,
     StartupAction,
     build_items,
 )
@@ -13,18 +11,19 @@ from jfterm.models import (
 )
 
 
-def test_build_items_empty_workspace_yields_nothing():
+def test_build_items_empty_workspace_yields_unsorted_actions():
     ws = Workspace()
-    assert build_items(ws) == []
+    displays = [i.display for i in build_items(ws)]
+    assert displays == ["Unsorted: New Shell Tab", "Unsorted: New Web Tab"]
 
 
-def test_build_items_project_with_no_extras_emits_only_new_tab():
+def test_build_items_project_with_no_extras_emits_new_shell_and_web_tab():
     ws = Workspace()
     ws.add_project(name="Alpha", directory="/tmp/a")
     items = build_items(ws)
-    assert len(items) == 1
-    assert items[0].display == "Alpha: New Shell Tab"
-    assert isinstance(items[0].action, NewTabAction)
+    displays = [i.display for i in items]
+    assert "Alpha: New Shell Tab" in displays
+    assert "Alpha: New Web Tab" in displays
 
 
 def test_build_items_emits_startup_row_only_when_startup_commands_present():
@@ -68,18 +67,17 @@ def test_build_items_uses_unsorted_label_for_unsorted_tabs():
     ws = Workspace()
     t = TerminalTab(title="scratch")
     ws.unsorted.add_tab(t)
-    items = build_items(ws)
-    assert len(items) == 1
-    assert items[0].display == "Unsorted: ▦ scratch"
-    assert isinstance(items[0].action, JumpAction)
+    displays = [i.display for i in build_items(ws)]
+    assert "Unsorted: ▦ scratch" in displays
 
 
-def test_build_items_no_new_tab_or_startup_for_unsorted():
+def test_build_items_no_startup_row_for_unsorted():
     ws = Workspace()
     ws.unsorted.add_tab(TerminalTab(title="x"))
     displays = [i.display for i in build_items(ws)]
-    assert "Unsorted: New Shell Tab" not in displays
     assert "Unsorted: Run Startup Commands" not in displays
+    assert "Unsorted: New Shell Tab" in displays
+    assert "Unsorted: New Web Tab" in displays
 
 
 def test_build_items_skips_archived_projects():

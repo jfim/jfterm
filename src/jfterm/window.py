@@ -921,13 +921,16 @@ class JFTermWindow(Adw.ApplicationWindow):
             FlashAction,
             JumpAction,
             NewTabAction,
+            NewWebTabAction,
             StartupAction,
         )
 
         if isinstance(action, FlashAction):
             self._on_flash_command_launched(self.sidebar, action.project, action.flash)
         elif isinstance(action, NewTabAction):
-            self._spawn_tab(action.project)
+            self._spawn_tab(action.group)
+        elif isinstance(action, NewWebTabAction):
+            self._on_new_web_tab(self.sidebar, action.group, "")
         elif isinstance(action, StartupAction):
             self._on_launch_project(self.sidebar, action.project)
         elif isinstance(action, JumpAction):

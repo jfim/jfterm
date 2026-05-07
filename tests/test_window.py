@@ -67,6 +67,7 @@ def test_dispatch_launcher_action_routes_to_existing_handlers():
         FlashAction,
         JumpAction,
         NewTabAction,
+        NewWebTabAction,
         StartupAction,
     )
     from jfterm.models import FlashCommand
@@ -82,19 +83,22 @@ def test_dispatch_launcher_action_routes_to_existing_handlers():
         ws=ws,
         sidebar=object(),
         _on_flash_command_launched=lambda sb, proj, f: calls.append(("flash", proj, f)),
-        _spawn_tab=lambda proj: calls.append(("new", proj)),
+        _spawn_tab=lambda group: calls.append(("new", group)),
+        _on_new_web_tab=lambda sb, group, url: calls.append(("web", group, url)),
         _on_launch_project=lambda sb, proj: calls.append(("startup", proj)),
         _on_tab_activated=lambda sb, t: calls.append(("jump", t)),
     )
 
     JFTermWindow._dispatch_launcher_action(fake, FlashAction(p, fc))  # pyright: ignore[reportArgumentType]
     JFTermWindow._dispatch_launcher_action(fake, NewTabAction(p))  # pyright: ignore[reportArgumentType]
+    JFTermWindow._dispatch_launcher_action(fake, NewWebTabAction(p))  # pyright: ignore[reportArgumentType]
     JFTermWindow._dispatch_launcher_action(fake, StartupAction(p))  # pyright: ignore[reportArgumentType]
     JFTermWindow._dispatch_launcher_action(fake, JumpAction(tab))  # pyright: ignore[reportArgumentType]
 
     assert calls == [
         ("flash", p, fc),
         ("new", p),
+        ("web", p, ""),
         ("startup", p),
         ("jump", tab),
     ]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jfterm.models import FlashCommand, Project, Tab, Workspace
+from jfterm.models import FlashCommand, Group, Project, Tab, Workspace
 
 
 @dataclass(frozen=True)
@@ -13,7 +13,12 @@ class FlashAction:
 
 @dataclass(frozen=True)
 class NewTabAction:
-    project: Project
+    group: Group
+
+
+@dataclass(frozen=True)
+class NewWebTabAction:
+    group: Group
 
 
 @dataclass(frozen=True)
@@ -26,7 +31,7 @@ class JumpAction:
     tab: Tab
 
 
-Action = FlashAction | NewTabAction | StartupAction | JumpAction
+Action = FlashAction | NewTabAction | NewWebTabAction | StartupAction | JumpAction
 
 
 @dataclass(frozen=True)
@@ -45,12 +50,15 @@ def build_items(ws: Workspace) -> list[LauncherItem]:
         if p.archived:
             continue
         items.append(LauncherItem(f"{p.name}: New Shell Tab", NewTabAction(p)))
+        items.append(LauncherItem(f"{p.name}: New Web Tab", NewWebTabAction(p)))
         if p.startup_commands:
             items.append(LauncherItem(f"{p.name}: Run Startup Commands", StartupAction(p)))
         for fc in p.flash_commands:
             items.append(LauncherItem(f"{p.name}: ⚡ {fc.name}", FlashAction(p, fc)))
         for t in p.tabs:
             items.append(LauncherItem(f"{p.name}: ▦ {_tab_title(t)}", JumpAction(t)))
+    items.append(LauncherItem("Unsorted: New Shell Tab", NewTabAction(ws.unsorted)))
+    items.append(LauncherItem("Unsorted: New Web Tab", NewWebTabAction(ws.unsorted)))
     for t in ws.unsorted.tabs:
         items.append(LauncherItem(f"Unsorted: ▦ {_tab_title(t)}", JumpAction(t)))
     return items
