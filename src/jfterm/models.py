@@ -25,6 +25,12 @@ class Tab:
     current_cwd: str | None = None
     is_running: bool = False
     osc133_seen: bool = False
+    # The startup command this tab was launched with (None for plain shells).
+    # Set once at spawn time and reused on restart.
+    launched_command: str | None = None
+    # True while a restart is in flight, so the old terminal's child-exited
+    # signal does not remove the tab from its group.
+    is_restarting: bool = False
 
 
 class Group:
