@@ -68,6 +68,22 @@ def show_project_dialog(
 
     # --- startup commands editor ---
 
+    commands_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+    handle_spacer = Gtk.Image.new_from_icon_name("open-menu-symbolic")
+    handle_spacer.set_opacity(0)
+    cmd_header_label = Gtk.Label(label="Command", xalign=0)
+    cmd_header_label.add_css_class("dim-label")
+    cmd_header_label.set_hexpand(True)
+    delay_header_label = Gtk.Label(label="Delay (secs)", xalign=0)
+    delay_header_label.add_css_class("dim-label")
+    delay_header_label.set_width_chars(12)
+    delete_spacer = Gtk.Image.new_from_icon_name("user-trash-symbolic")
+    delete_spacer.set_opacity(0)
+    commands_header.append(handle_spacer)
+    commands_header.append(cmd_header_label)
+    commands_header.append(delay_header_label)
+    commands_header.append(delete_spacer)
+
     commands_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
     # Each entry is (row container, Gtk.Entry for command, Gtk.SpinButton for delay).
     command_rows: list[tuple[Gtk.Box, Gtk.Entry, Gtk.SpinButton]] = []
@@ -213,6 +229,7 @@ def show_project_dialog(
         Gtk.Label(label="Directory", xalign=0),
         dir_row,
         Gtk.Label(label="Startup commands (one tab per command)", xalign=0),
+        commands_header,
         commands_box,
         add_cmd_btn,
         actions,
