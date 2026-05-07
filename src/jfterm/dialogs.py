@@ -170,6 +170,9 @@ def show_project_dialog(
     for sc in initial_commands or []:
         _add_command_row(sc.command, sc.delay)
 
+    if not command_rows:
+        _add_command_row()
+
     add_cmd_btn = Gtk.Button(label="Add command")
     add_cmd_btn.add_css_class("flat")
     add_cmd_btn.connect("clicked", lambda _b: _add_command_row())
