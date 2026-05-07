@@ -1160,7 +1160,7 @@ class JFTermWindow(Adw.ApplicationWindow):
 
         if not has_projects:
             new_proj_btn = Gtk.Button(label="New project")
-            new_proj_btn.connect("clicked", lambda _b: self._on_new_project(self.sidebar))
+            new_proj_btn.connect("clicked", lambda _b: self._on_new_project())
             self._empty_buttons.append(new_proj_btn)
 
         launchable = [p for p in active_projects if p.startup_commands]
