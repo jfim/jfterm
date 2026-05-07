@@ -350,6 +350,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             self.sidebar.refresh()
         wrapped = wrap_flash_command(fc)
         tab = self._spawn_tab(project, command=wrapped, focus=fc.focus_on_launch)
+        tab.flash_name = fc.name
         tab.title = f"⚡ {fc.name}"
         self.sidebar.refresh()
 
@@ -397,7 +398,10 @@ class JFTermWindow(Adw.ApplicationWindow):
         self._refresh_tab_dot(tab)
 
     def _on_tab_title_changed(self, tab: Tab, title: str) -> None:
-        tab.title = title
+        if tab.flash_name is not None:
+            tab.title = f"⚡ {tab.flash_name}: {title}" if title else f"⚡ {tab.flash_name}"
+        else:
+            tab.title = title
         self.sidebar.refresh()
 
     # --- helpers ---
