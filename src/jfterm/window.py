@@ -172,19 +172,14 @@ class JFTermWindow(Adw.ApplicationWindow):
             self._mcp_server.start()
 
         # Command launcher (issue #19)
-        from jfterm.double_tap import DoubleTapDetector
         from jfterm.launcher import Launcher
 
         self._launcher = Launcher(self, dispatch=self._dispatch_launcher_action)
-        self._double_shift = DoubleTapDetector(
-            target_keyval=Gdk.KEY_Shift_L,
-            interval_ms=300,
-            callback=self._open_launcher,
-        )
-        key_ctrl = Gtk.EventControllerKey()
-        key_ctrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        key_ctrl.connect("key-pressed", self._on_window_key_pressed)
-        self.add_controller(key_ctrl)
+        self._launcher_shortcut_state: tuple[
+            Gtk.EventControllerKey | None, Gtk.ShortcutController | None
+        ] = (None, None)
+        self._double_shift = None
+        self._install_launcher_shortcut(self._settings.launcher_shortcut)
 
     # --- handlers ---
 
@@ -1187,14 +1182,63 @@ class JFTermWindow(Adw.ApplicationWindow):
             launch_btn.set_popover(popover)
             self._empty_buttons.append(launch_btn)
 
+    def _install_launcher_shortcut(self, preset_id: str) -> None:
+        from jfterm.double_tap import DoubleTapDetector
+        from jfterm.launcher_shortcut import accelerator_for
+
+        accel = accelerator_for(preset_id)
+        installed_key_ctrl: Gtk.EventControllerKey | None = None
+        installed_shortcut_ctrl: Gtk.ShortcutController | None = None
+
+        if accel is None:
+            self._double_shift = DoubleTapDetector(
+                target_keyval=Gdk.KEY_Shift_L,
+                interval_ms=300,
+                callback=self._open_launcher,
+            )
+            kc = Gtk.EventControllerKey()
+            kc.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+            kc.connect("key-pressed", self._on_window_key_pressed)
+            self.add_controller(kc)
+            installed_key_ctrl = kc
+        else:
+            self._double_shift = None
+            sc = Gtk.ShortcutController()
+            sc.set_scope(Gtk.ShortcutScope.LOCAL)
+            sc.add_shortcut(
+                Gtk.Shortcut.new(
+                    Gtk.ShortcutTrigger.parse_string(accel),
+                    Gtk.CallbackAction.new(self._on_launcher_accelerator),
+                )
+            )
+            self.add_controller(sc)
+            installed_shortcut_ctrl = sc
+
+        self._launcher_shortcut_state = (installed_key_ctrl, installed_shortcut_ctrl)
+
+    def _uninstall_launcher_shortcut(self) -> None:
+        key_ctrl, shortcut_ctrl = self._launcher_shortcut_state
+        if key_ctrl is not None:
+            self.remove_controller(key_ctrl)
+        if shortcut_ctrl is not None:
+            self.remove_controller(shortcut_ctrl)
+        self._double_shift = None
+        self._launcher_shortcut_state = (None, None)
+
+    def _on_launcher_accelerator(self, _widget, _args) -> bool:
+        self._open_launcher()
+        return True
+
     def _on_window_key_pressed(self, _ctrl, keyval, _keycode, _state) -> bool:
         from gi.repository import GLib
 
-        self._double_shift.on_press(keyval, GLib.get_monotonic_time() // 1000)
+        if self._double_shift is not None:
+            self._double_shift.on_press(keyval, GLib.get_monotonic_time() // 1000)
         return False
 
     def _open_launcher(self) -> None:
-        self._double_shift.reset()
+        if self._double_shift is not None:
+            self._double_shift.reset()
         self._launcher.open(self.ws)
 
     def _dispatch_launcher_action(self, action) -> None:
