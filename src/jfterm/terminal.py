@@ -5,9 +5,11 @@ from urllib.parse import unquote, urlparse
 
 import gi
 
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
 gi.require_version("Vte", "3.91")
 
-from gi.repository import GLib, GObject, Vte  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Vte  # noqa: E402
 
 
 class JFTermTerminal(Vte.Terminal):
@@ -70,6 +72,50 @@ class JFTermTerminal(Vte.Terminal):
 
         # Polling fallback. Cancels itself once an OSC 133 marker is seen.
         self._poll_source: int | None = GLib.timeout_add(250, self._poll_tcgetpgrp)
+
+        self._install_context_menu()
+
+    # --- context menu ---
+
+    def _install_context_menu(self) -> None:
+        menu = Gio.Menu()
+        menu.append("Copy", "term.copy")
+        menu.append("Paste", "term.paste")
+        self._popover = Gtk.PopoverMenu.new_from_model(menu)
+        self._popover.set_parent(self)
+        self._popover.set_has_arrow(False)
+
+        actions = Gio.SimpleActionGroup()
+        copy_action = Gio.SimpleAction.new("copy", None)
+        copy_action.connect("activate", lambda *_: self._do_copy())
+        actions.add_action(copy_action)
+        paste_action = Gio.SimpleAction.new("paste", None)
+        paste_action.connect("activate", lambda *_: self._do_paste())
+        actions.add_action(paste_action)
+        self._copy_action = copy_action
+        self.insert_action_group("term", actions)
+
+        click = Gtk.GestureClick()
+        click.set_button(Gdk.BUTTON_SECONDARY)
+        click.connect("pressed", self._on_right_click)
+        self.add_controller(click)
+
+    def _on_right_click(self, _gesture, _n_press, x: float, y: float) -> None:
+        self._copy_action.set_enabled(self.get_has_selection())
+        rect = Gdk.Rectangle()
+        rect.x = int(x)
+        rect.y = int(y)
+        rect.width = 1
+        rect.height = 1
+        self._popover.set_pointing_to(rect)
+        self._popover.popup()
+
+    def _do_copy(self) -> None:
+        if self.get_has_selection():
+            self.copy_clipboard_format(Vte.Format.TEXT)
+
+    def _do_paste(self) -> None:
+        self.paste_clipboard()
 
     # --- VTE callbacks ---
 
