@@ -12,6 +12,9 @@ class AppSettings:
     font_desc: str = ""  # Pango font string, e.g. "Monospace 11";
     # empty means "system default"
     palette_id: str = "system"
+    mcp_enabled: bool = True
+    mcp_host: str = "127.0.0.1"
+    mcp_port: int = 7820
 
 
 def default_path() -> Path:
@@ -30,9 +33,19 @@ def load(path: Path) -> AppSettings:
         return AppSettings()
     if not isinstance(data, dict):
         return AppSettings()
+    defaults = AppSettings()
+    try:
+        port = int(data.get("mcp_port", defaults.mcp_port))
+    except (TypeError, ValueError):
+        port = defaults.mcp_port
+    if not (1 <= port <= 65535):
+        port = defaults.mcp_port
     return AppSettings(
         font_desc=str(data.get("font_desc", "")),
         palette_id=str(data.get("palette_id", "system")),
+        mcp_enabled=bool(data.get("mcp_enabled", defaults.mcp_enabled)),
+        mcp_host=str(data.get("mcp_host", defaults.mcp_host)),
+        mcp_port=port,
     )
 
 
