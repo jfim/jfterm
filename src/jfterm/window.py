@@ -3,6 +3,8 @@ from __future__ import annotations
 import contextlib
 import os
 import signal
+import sys
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 import gi
@@ -10,7 +12,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gtk  # noqa: E402
+from gi.repository import Adw, Gio, Gtk  # noqa: E402, I001
 
 from jfterm.flash import wrap_flash_command  # noqa: E402
 from jfterm.models import (  # noqa: E402
@@ -24,6 +26,13 @@ from jfterm.models import (  # noqa: E402
     Workspace,
 )
 from jfterm.persistence import default_path, load_projects, save_projects  # noqa: E402
+from jfterm.preferences import AppPreferencesDialog  # noqa: E402
+from jfterm.settings import (  # noqa: E402
+    AppSettings,
+    default_path as default_settings_path,
+    load as load_settings,
+    save as save_settings,
+)
 from jfterm.sidebar import Sidebar  # noqa: E402
 from jfterm.terminal import JFTermTerminal  # noqa: E402
 
@@ -38,6 +47,9 @@ class JFTermWindow(Adw.ApplicationWindow):
 
         self.ws = Workspace()
         load_projects(self.ws, default_path())
+
+        self._settings_path = default_settings_path()
+        self._settings: AppSettings = load_settings(self._settings_path)
 
         self.sidebar = Sidebar(self.ws)
         self.terminal_stack = Gtk.Stack()
@@ -79,6 +91,20 @@ class JFTermWindow(Adw.ApplicationWindow):
         self._sidebar_toggle.set_active(True)
         self._sidebar_toggle.connect("toggled", self._on_sidebar_toggled)
         header.pack_start(self._sidebar_toggle)
+
+        # Hamburger menu (right end of header bar).
+        menu = Gio.Menu()
+        menu.append("Preferences", "win.preferences")
+        menu_button = Gtk.MenuButton()
+        menu_button.set_icon_name("open-menu-symbolic")
+        menu_button.set_tooltip_text("Main menu")
+        menu_button.set_menu_model(menu)
+        header.pack_end(menu_button)
+
+        prefs_action = Gio.SimpleAction.new("preferences", None)
+        prefs_action.connect("activate", self._on_preferences)
+        self.add_action(prefs_action)
+
         toolbar.add_top_bar(header)
         toolbar.set_content(paned)
         self.set_content(toolbar)
@@ -151,7 +177,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         focus: bool = True,
     ) -> TerminalTab:
         cwd = group.directory if isinstance(group, Project) else None
-        terminal = JFTermTerminal(cwd=cwd, send_after_spawn=command)
+        terminal = JFTermTerminal(cwd=cwd, send_after_spawn=command, appearance=self._settings)
         terminal.set_vexpand(True)
         terminal.set_hexpand(True)
         tab = TerminalTab(
@@ -360,7 +386,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             old_terminal._proxy.close()  # break GLib closure ref before GTK dispose
             self.terminal_stack.remove(old_terminal)
 
-        new_terminal = JFTermTerminal(cwd=cwd, send_after_spawn=command)
+        new_terminal = JFTermTerminal(cwd=cwd, send_after_spawn=command, appearance=self._settings)
         new_terminal.set_vexpand(True)
         new_terminal.set_hexpand(True)
 
@@ -803,6 +829,27 @@ class JFTermWindow(Adw.ApplicationWindow):
             self.terminal_stack.set_visible_child(nxt.widget)
             self.sidebar.set_active_tab(nxt)
             nxt.widget.grab_focus()
+
+    def _on_preferences(self, _action, _param) -> None:
+        dialog = AppPreferencesDialog(self._settings)
+        dialog.connect("changed", self._on_settings_changed)
+        dialog.present(self)
+
+    def _on_settings_changed(self, _dialog, settings: AppSettings) -> None:
+        self._settings = settings
+        try:
+            save_settings(settings, self._settings_path)
+        except OSError as e:
+            print(f"jfterm: failed to save settings: {e}", file=sys.stderr)
+        for terminal in self._iter_terminals():
+            terminal.apply_appearance(settings)
+
+    def _iter_terminals(self) -> Iterator[JFTermTerminal]:
+        for group in self.ws.all_groups():
+            for tab in group.tabs:
+                widget = getattr(tab, "widget", None)
+                if isinstance(widget, JFTermTerminal):
+                    yield widget
 
     def _on_sidebar_toggled(self, btn: Gtk.ToggleButton) -> None:
         visible = btn.get_active()
