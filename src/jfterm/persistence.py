@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-from jfterm.models import Project, StartupCommand, Workspace
+from jfterm.models import FlashCommand, Project, StartupCommand, Workspace
 
 _KNOWN_FIELDS = {
     "id",
@@ -11,6 +11,7 @@ _KNOWN_FIELDS = {
     "expanded",
     "startup_commands",
     "spawn_blank_after_startup",
+    "flash_commands",
 }
 
 
@@ -30,6 +31,22 @@ def _load_commands(raw: list) -> list[StartupCommand]:
     return out
 
 
+def _load_flash_commands(raw: list) -> list[FlashCommand]:
+    out: list[FlashCommand] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        out.append(
+            FlashCommand(
+                name=str(item.get("name", "")),
+                command=str(item.get("command", "")),
+                keep_open_on_success=bool(item.get("keep_open_on_success", False)),
+                focus_on_launch=bool(item.get("focus_on_launch", True)),
+            )
+        )
+    return out
+
+
 def load_projects(ws: Workspace, path: Path) -> None:
     if not path.exists():
         return
@@ -42,6 +59,7 @@ def load_projects(ws: Workspace, path: Path) -> None:
             expanded=entry.get("expanded", True),
             startup_commands=_load_commands(entry.get("startup_commands", [])),
             spawn_blank_after_startup=bool(entry.get("spawn_blank_after_startup", False)),
+            flash_commands=_load_flash_commands(entry.get("flash_commands", [])),
         )
         # Stash unknown fields for forward compatibility.
         p._extra = {k: v for k, v in entry.items() if k not in _KNOWN_FIELDS}
@@ -64,6 +82,15 @@ def save_projects(ws: Workspace, path: Path) -> None:
                     {"command": c.command, "delay": c.delay} for c in p.startup_commands
                 ],
                 "spawn_blank_after_startup": p.spawn_blank_after_startup,
+                "flash_commands": [
+                    {
+                        "name": fc.name,
+                        "command": fc.command,
+                        "keep_open_on_success": fc.keep_open_on_success,
+                        "focus_on_launch": fc.focus_on_launch,
+                    }
+                    for fc in p.flash_commands
+                ],
                 **getattr(p, "_extra", {}),
             }
             for p in ws.projects
