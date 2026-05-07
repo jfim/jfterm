@@ -11,7 +11,7 @@ import gi
 gi.require_version("Vte", "3.91")
 from gi.repository import GLib, GObject  # noqa: E402
 
-from jfterm.osc_scanner import OscScanner  # noqa: E402
+from jfterm.osc_scanner import OscScanner, ProgressEvent, PromptEvent  # noqa: E402
 
 
 class PtyProxy(GObject.Object):
@@ -26,6 +26,7 @@ class PtyProxy(GObject.Object):
     __gsignals__ = {
         "data-ready": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "progress-changed": (GObject.SignalFlags.RUN_FIRST, None, (int, int)),
+        "running-changed": (GObject.SignalFlags.RUN_FIRST, None, (bool,)),
         "child-exited": (GObject.SignalFlags.RUN_FIRST, None, (int,)),
     }
 
@@ -91,7 +92,13 @@ class PtyProxy(GObject.Object):
         if clean:
             self.emit("data-ready", clean)
         for ev in events:
-            self.emit("progress-changed", ev.state, ev.value)
+            if isinstance(ev, ProgressEvent):
+                self.emit("progress-changed", ev.state, ev.value)
+            elif isinstance(ev, PromptEvent):
+                if ev.kind == "C":
+                    self.emit("running-changed", True)
+                elif ev.kind in ("A", "D"):
+                    self.emit("running-changed", False)
         return True
 
     def _on_child_exited(self, _: int, status: int) -> None:
