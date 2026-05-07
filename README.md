@@ -5,6 +5,8 @@ one-click access to each project's setup.
 
 ![JFTerm main window](images/main-window.png)
 
+![Project preferences dialog](images/project-preferences.png)
+
 ## Features
 
 - Per-project tab groups in a sidebar, plus an Unsorted bucket for ad-hoc tabs.
@@ -19,8 +21,6 @@ one-click access to each project's setup.
   matches the tab's project.
 - Drag-and-drop to move tabs between projects.
 - Built on GTK 4 / libadwaita with VTE 3.91 for the terminal itself.
-
-![Project preferences dialog](images/project-preferences.png)
 
 ## Running
 
