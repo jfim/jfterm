@@ -381,7 +381,7 @@ def show_project_dialog(
     actions.append(cancel_btn)
     actions.append(save_btn)
 
-    project_group = Adw.PreferencesGroup()
+    project_group = Adw.PreferencesGroup(title="Project")
     project_inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
     project_inner.append(Gtk.Label(label="Name", xalign=0))
     project_inner.append(name_entry)
