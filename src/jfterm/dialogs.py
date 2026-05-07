@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from gi.repository import Adw, Gdk, GObject, Gtk
+from gi.repository import Adw, Gdk, GLib, GObject, Gtk
 
 from jfterm.models import FlashCommand, StartupCommand
 
@@ -502,5 +502,10 @@ def show_new_web_tab_dialog(
 
     entry.connect("activate", _on_activate)
     dialog.present(parent)
-    entry.grab_focus_without_selecting()
-    entry.set_position(-1)
+    def _focus_at_end() -> bool:
+        entry.grab_focus_without_selecting()
+        entry.set_position(-1)
+        entry.select_region(-1, -1)
+        return False
+
+    GLib.idle_add(_focus_at_end)
