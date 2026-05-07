@@ -37,9 +37,7 @@ def show_project_dialog(
     initial_commands: list[StartupCommand] | None = None,
     initial_spawn_blank_after_startup: bool = False,
     initial_flash_commands: list[FlashCommand] | None = None,
-    on_save: Callable[
-        [str, str, list[StartupCommand], bool, list[FlashCommand]], None
-    ],
+    on_save: Callable[[str, str, list[StartupCommand], bool, list[FlashCommand]], None],
     on_disband: Callable[[], None] | None = None,
 ) -> None:
     dlg = Adw.Window(transient_for=parent, modal=True, title=title, default_width=640)
@@ -230,9 +228,7 @@ def show_project_dialog(
         flash_header.append(w)
 
     flash_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-    flash_rows: list[
-        tuple[Gtk.Box, Gtk.Entry, Gtk.Entry, Gtk.CheckButton, Gtk.CheckButton]
-    ] = []
+    flash_rows: list[tuple[Gtk.Box, Gtk.Entry, Gtk.Entry, Gtk.CheckButton, Gtk.CheckButton]] = []
 
     def _move_flash_row(src_row: Gtk.Box, dst_row: Gtk.Box) -> None:
         if src_row is dst_row:
