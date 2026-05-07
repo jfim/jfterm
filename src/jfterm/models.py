@@ -173,9 +173,7 @@ class Workspace:
         if project not in active:
             raise ValueError(f"project {project!r} is not in this workspace")
         if position < 0 or position >= len(active):
-            raise ValueError(
-                f"position {position} out of range 0..{len(active) - 1}"
-            )
+            raise ValueError(f"position {position} out of range 0..{len(active) - 1}")
 
         self.projects.remove(project)
         active_after = [p for p in self.projects if not p.archived]
