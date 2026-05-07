@@ -5,7 +5,7 @@ from collections.abc import Callable
 from gi.repository import Gdk, GObject, Gtk
 
 from jfterm.matching import is_inside, matching_projects
-from jfterm.models import Group, Project, Tab, TerminalTab, Workspace
+from jfterm.models import Group, LinkedTab, Project, Tab, TerminalTab, Workspace
 from jfterm.progress_bar import TabProgressBar
 from jfterm.status_dot import StatusDot
 
@@ -553,7 +553,7 @@ class Sidebar(Gtk.ScrolledWindow):
             row.add_css_class("jfterm-active-tab")
 
         dot: StatusDot | None = None
-        if isinstance(tab, TerminalTab):
+        if isinstance(tab, (TerminalTab, LinkedTab)):
             dot = StatusDot()
             dot.set_valign(Gtk.Align.CENTER)
             if isinstance(group, Project):
