@@ -315,7 +315,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         spec,  # jfterm.linked.LinkedSpec
         flash_name: str,
         focus: bool = True,
-    ) -> "LinkedTab":
+    ) -> LinkedTab:
         from jfterm.linkedtab import JFTermLinkedView, is_available
         from jfterm.models import LinkedTab
         from jfterm.url_scanner import UrlScanner
