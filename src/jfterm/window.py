@@ -110,6 +110,17 @@ class JFTermWindow(Adw.ApplicationWindow):
             terminal=terminal,
             launched_command=command,
         )
+        self._wire_terminal(tab, terminal)
+        self.terminal_stack.add_child(terminal)
+        group.add_tab(tab)
+        self._current_group = group
+        self.sidebar.refresh()
+        if focus:
+            self.terminal_stack.set_visible_child(terminal)
+            terminal.grab_focus()
+        return tab
+
+    def _wire_terminal(self, tab: Tab, terminal: JFTermTerminal) -> None:
         terminal.connect(
             "cwd-changed",
             lambda _t, path, t=tab: self._on_tab_cwd_changed(t, path),
@@ -126,14 +137,6 @@ class JFTermWindow(Adw.ApplicationWindow):
             "child-exited",
             lambda _t, _status, t=tab: self._on_close_tab(self.sidebar, t),
         )
-        self.terminal_stack.add_child(terminal)
-        group.add_tab(tab)
-        self._current_group = group
-        self.sidebar.refresh()
-        if focus:
-            self.terminal_stack.set_visible_child(terminal)
-            terminal.grab_focus()
-        return tab
 
     def _on_close_tab(self, _sb, tab: Tab) -> None:
         group = self.ws._find_group(tab)
