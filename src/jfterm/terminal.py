@@ -140,15 +140,21 @@ class JFTermTerminal(Vte.Terminal):
         self._osc133_seen = True
         self.emit("running-changed", False)
 
-    def _on_commit(self, _t, text: str, size: int) -> None:
-        # VTE's commit signal hands us already-encoded bytes as a Python
-        # string of length `size`. Convert via latin-1 to preserve bytes 1:1.
-        self._proxy.write(text[:size].encode("latin-1"))
+    def _on_commit(self, _t, text: str, _size: int) -> None:
+        self._proxy.write(text.encode("utf-8"))
 
     def _on_char_size_changed(self, _t, _w, _h) -> None:
         cols = self.get_column_count()
         rows = self.get_row_count()
         self._proxy.resize(rows, cols)
+
+    def do_dispose(self) -> None:  # type: ignore[override]
+        if hasattr(self, "_proxy") and self._proxy is not None:
+            self._proxy.close()
+        if self._poll_source is not None:
+            GLib.source_remove(self._poll_source)
+            self._poll_source = None
+        Vte.Terminal.do_dispose(self)
 
     # --- proxy callbacks ---
 
