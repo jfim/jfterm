@@ -1164,18 +1164,20 @@ class JFTermWindow(Adw.ApplicationWindow):
             new_proj_btn = Gtk.Button(label="New project")
             new_proj_btn.connect("clicked", lambda _b: self._on_new_project(self.sidebar))
             self._empty_buttons.append(new_proj_btn)
-        elif len(active_projects) == 1:
-            sole = active_projects[0]
+
+        launchable = [p for p in active_projects if p.startup_commands]
+        if len(launchable) == 1:
+            sole = launchable[0]
             launch_btn = Gtk.Button(label=f"Launch {sole.name}")
             launch_btn.connect(
                 "clicked", lambda _b: self._on_launch_project(self.sidebar, sole)
             )
             self._empty_buttons.append(launch_btn)
-        else:
+        elif len(launchable) > 1:
             launch_btn = Gtk.MenuButton(label="Launch project")
             popover = Gtk.Popover()
             pbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-            for p in active_projects:
+            for p in launchable:
                 item = Gtk.Button(label=p.name)
                 item.add_css_class("flat")
 
