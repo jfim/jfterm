@@ -6,6 +6,14 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+LAUNCHER_SHORTCUT_IDS: tuple[str, ...] = (
+    "double_shift",
+    "ctrl_shift_p",
+    "ctrl_p",
+    "ctrl_shift_f2",
+)
+DEFAULT_LAUNCHER_SHORTCUT = "double_shift"
+
 
 @dataclass
 class AppSettings:
@@ -18,6 +26,7 @@ class AppSettings:
     window_width: int = 1100
     window_height: int = 700
     window_maximized: bool = False
+    launcher_shortcut: str = DEFAULT_LAUNCHER_SHORTCUT
 
 
 def default_path() -> Path:
@@ -51,6 +60,12 @@ def load(path: Path) -> AppSettings:
             return fallback
         return value if value > 0 else fallback
 
+    raw_shortcut = data.get("launcher_shortcut", DEFAULT_LAUNCHER_SHORTCUT)
+    shortcut = (
+        raw_shortcut
+        if isinstance(raw_shortcut, str) and raw_shortcut in LAUNCHER_SHORTCUT_IDS
+        else DEFAULT_LAUNCHER_SHORTCUT
+    )
     return AppSettings(
         font_desc=str(data.get("font_desc", "")),
         palette_id=str(data.get("palette_id", "system")),
@@ -60,6 +75,7 @@ def load(path: Path) -> AppSettings:
         window_width=_positive_int("window_width", defaults.window_width),
         window_height=_positive_int("window_height", defaults.window_height),
         window_maximized=bool(data.get("window_maximized", defaults.window_maximized)),
+        launcher_shortcut=shortcut,
     )
 
 
