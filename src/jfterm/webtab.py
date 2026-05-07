@@ -42,11 +42,15 @@ class JFTermWebView(Gtk.Box):
     Emits:
       - `title-changed(str)` — page title changed.
       - `url-changed(str)` — current URI changed.
+      - `progress-changed(int, int)` — page-load progress, mirroring
+        terminal.py's signal: state=1/value=0..100 while loading,
+        state=0/value=0 once idle.
     """
 
     __gsignals__ = {
         "title-changed": (GObject.SignalFlags.RUN_FIRST, None, (str,)),
         "url-changed": (GObject.SignalFlags.RUN_FIRST, None, (str,)),
+        "progress-changed": (GObject.SignalFlags.RUN_FIRST, None, (int, int)),
     }
 
     def __init__(self, *, url: str) -> None:
@@ -104,6 +108,7 @@ class JFTermWebView(Gtk.Box):
         self._web.connect("notify::title", self._on_title_notify)
         self._web.connect("notify::uri", self._on_uri_notify)
         self._web.connect("notify::estimated-load-progress", self._on_progress_notify)
+        self._web.connect("notify::is-loading", self._on_loading_notify)
 
         self.append(self._web)
 
@@ -134,6 +139,14 @@ class JFTermWebView(Gtk.Box):
     def _on_progress_notify(self, *_: Any) -> None:
         self._back.set_sensitive(self._web.can_go_back())
         self._forward.set_sensitive(self._web.can_go_forward())
+        if self._web.is_loading():
+            self.emit("progress-changed", 1, int(self._web.get_estimated_load_progress() * 100))
+
+    def _on_loading_notify(self, *_: Any) -> None:
+        if self._web.is_loading():
+            self.emit("progress-changed", 1, 0)
+        else:
+            self.emit("progress-changed", 0, 0)
 
     def _on_entry_activate(self, entry: Gtk.Entry) -> None:
         text = entry.get_text().strip()

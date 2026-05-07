@@ -257,6 +257,12 @@ class JFTermWindow(Adw.ApplicationWindow):
                 self._on_web_tab_url_changed(t, url) if t.web_view is wv else None
             ),
         )
+        web_view.connect(
+            "progress-changed",
+            lambda _w, state, value, t=tab, wv=web_view: (
+                self._on_tab_progress(t, state, value) if t.web_view is wv else None
+            ),
+        )
 
     def _on_web_tab_title_changed(self, tab: WebTab, title: str) -> None:
         base = title or tab.url
