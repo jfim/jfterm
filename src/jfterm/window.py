@@ -11,7 +11,8 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk  # noqa: E402
 
-from jfterm.models import Group, Project, StartupCommand, Tab, Workspace  # noqa: E402
+from jfterm.flash import wrap_flash_command  # noqa: E402
+from jfterm.models import FlashCommand, Group, Project, StartupCommand, Tab, Workspace  # noqa: E402
 from jfterm.persistence import default_path, load_projects, save_projects  # noqa: E402
 from jfterm.sidebar import Sidebar  # noqa: E402
 from jfterm.terminal import JFTermTerminal  # noqa: E402
@@ -70,6 +71,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.sidebar.connect("new-project-requested", self._on_new_project)
         self.sidebar.connect("configure-project-requested", self._on_configure_project)
         self.sidebar.connect("launch-project-requested", self._on_launch_project)
+        self.sidebar.connect("flash-command-launched", self._on_flash_command_launched)
         self.sidebar.connect("toggle-expanded-requested", self._on_toggle_expanded)
         self.sidebar.connect("dot-clicked", self._on_dot_clicked)
         self.sidebar.connect("tab-dropped", self._on_tab_dropped)
@@ -333,6 +335,18 @@ class JFTermWindow(Adw.ApplicationWindow):
             return False
 
         _step(0)
+
+    def _on_flash_command_launched(
+        self, _sb, project: Project, fc: FlashCommand
+    ) -> None:
+        if not project.expanded:
+            project.expanded = True
+            save_projects(self.ws, default_path())
+            self.sidebar.refresh()
+        wrapped = wrap_flash_command(fc)
+        tab = self._spawn_tab(project, command=wrapped, focus=fc.focus_on_launch)
+        tab.title = f"⚡ {fc.name}"
+        self.sidebar.refresh()
 
     def _on_toggle_expanded(self, _sb, group: Group) -> None:
         group.expanded = not group.expanded
