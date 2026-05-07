@@ -1,10 +1,17 @@
+import os
+
 import pytest
+
+# Widget construction segfaults without a real display server even when
+# Gtk.init_check() returns True, so gate the whole module on $DISPLAY /
+# $WAYLAND_DISPLAY.
+if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+    pytest.skip("no display server", allow_module_level=True)
 
 gi = pytest.importorskip("gi")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk  # noqa: E402
 
-# Headless GTK init — same pattern as test_window.py uses.
 if not Gtk.init_check():
     pytest.skip("GTK cannot initialize", allow_module_level=True)
 
