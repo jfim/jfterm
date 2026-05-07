@@ -162,8 +162,8 @@ class JFTermWindow(Adw.ApplicationWindow):
         self._wire_terminal(tab, terminal)
         self.terminal_stack.add_child(terminal)
         group.add_tab(tab)
-        self._current_group = group
         if focus:
+            self._current_group = group
             self.terminal_stack.set_visible_child(terminal)
             self.sidebar.set_active_tab(tab)
             terminal.grab_focus()
