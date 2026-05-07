@@ -33,7 +33,7 @@ test *args:
 
 # Launch the app.
 run:
-    uv run jfterm
+    uv run python -m jfterm
 
 # Sync dev dependencies.
 sync:
