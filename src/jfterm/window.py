@@ -248,8 +248,8 @@ class JFTermWindow(Adw.ApplicationWindow):
         self._wire_web_view(tab, web_view)
         self.terminal_stack.add_child(web_view)
         group.add_tab(tab)
-        self._current_group = group
         if focus:
+            self._current_group = group
             self.terminal_stack.set_visible_child(web_view)
             self.sidebar.set_active_tab(tab)
             web_view.grab_focus()
@@ -730,6 +730,17 @@ class JFTermWindow(Adw.ApplicationWindow):
         if group is None:
             raise ProjectNotFound(project_name)
         tab = self._spawn_tab(group, command=command, focus=False)
+        return self._tab_to_info(tab, group.name)
+
+    def mcp_spawn_web_tab(self, project_name: str, url: str) -> TabInfo:
+        from jfterm.mcp_types import EmptyUrl, ProjectNotFound
+
+        if not url:
+            raise EmptyUrl()
+        group = next((g for g in self.ws.all_groups() if g.name == project_name), None)
+        if group is None:
+            raise ProjectNotFound(project_name)
+        tab = self._spawn_web_tab(group, url=url, focus=False)
         return self._tab_to_info(tab, group.name)
 
     def mcp_restart_tab(self, tab_id: str) -> TabInfo:

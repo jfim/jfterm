@@ -51,6 +51,9 @@ class GtkMCPController(MCPController):
     def spawn_tab(self, project_name: str, command: str) -> TabInfo:
         return _on_gtk_thread(lambda: self._window.mcp_spawn_tab(project_name, command))
 
+    def spawn_web_tab(self, project_name: str, url: str) -> TabInfo:
+        return _on_gtk_thread(lambda: self._window.mcp_spawn_web_tab(project_name, url))
+
     def restart_tab(self, tab_id: str) -> TabInfo:
         return _on_gtk_thread(lambda: self._window.mcp_restart_tab(tab_id))
 

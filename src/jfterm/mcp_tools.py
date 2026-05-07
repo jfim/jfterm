@@ -42,6 +42,16 @@ async def spawn_tab(controller: MCPController, params: SpawnTabInput) -> dict:
     return {"tab": asdict(tab)}
 
 
+class SpawnWebTabInput(BaseModel):
+    project_name: str
+    url: str
+
+
+async def spawn_web_tab(controller: MCPController, params: SpawnWebTabInput) -> dict:
+    tab = controller.spawn_web_tab(params.project_name, params.url)
+    return {"tab": asdict(tab)}
+
+
 class RestartTabInput(BaseModel):
     id: str
 
