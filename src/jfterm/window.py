@@ -105,6 +105,7 @@ class JFTermWindow(Adw.ApplicationWindow):
 
         # Hamburger menu (right end of header bar).
         menu = Gio.Menu()
+        menu.append("New project", "win.new-project")
         menu.append("Preferences", "win.preferences")
         menu_button = Gtk.MenuButton()
         menu_button.set_icon_name("open-menu-symbolic")
@@ -116,6 +117,10 @@ class JFTermWindow(Adw.ApplicationWindow):
         prefs_action.connect("activate", self._on_preferences)
         self.add_action(prefs_action)
 
+        new_project_action = Gio.SimpleAction.new("new-project", None)
+        new_project_action.connect("activate", lambda _a, _p: self._on_new_project())
+        self.add_action(new_project_action)
+
         toolbar.add_top_bar(header)
         toolbar.set_content(paned)
         self.set_content(toolbar)
@@ -126,7 +131,6 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.sidebar.connect("new-web-tab-requested", self._on_new_web_tab)
         self.sidebar.connect("close-tab-requested", self._on_close_tab)
         self.sidebar.connect("restart-tab-requested", self._on_restart_tab)
-        self.sidebar.connect("new-project-requested", self._on_new_project)
         self.sidebar.connect("configure-project-requested", self._on_configure_project)
         self.sidebar.connect("archive-project-requested", self._on_archive_project)
         self.sidebar.connect("delete-project-requested", self._on_delete_project)
@@ -569,7 +573,7 @@ class JFTermWindow(Adw.ApplicationWindow):
 
         self.sidebar.refresh()
 
-    def _on_new_project(self, _sb) -> None:
+    def _on_new_project(self) -> None:
         from jfterm.dialogs import show_project_dialog
 
         def _save(

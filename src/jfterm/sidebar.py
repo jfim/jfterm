@@ -54,7 +54,6 @@ class Sidebar(Gtk.ScrolledWindow):
         "delete-project-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "launch-project-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "flash-command-launched": (GObject.SignalFlags.RUN_FIRST, None, (object, object)),
-        "new-project-requested": (GObject.SignalFlags.RUN_FIRST, None, ()),
         "toggle-expanded-requested": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "dot-clicked": (GObject.SignalFlags.RUN_FIRST, None, (object, object, object)),
         "tab-dropped": (GObject.SignalFlags.RUN_FIRST, None, (object, object, int)),
@@ -116,11 +115,6 @@ class Sidebar(Gtk.ScrolledWindow):
             nxt = child.get_next_sibling()
             self._box.remove(child)
             child = nxt
-
-        new_proj_btn = Gtk.Button(label="+ New project")
-        new_proj_btn.add_css_class("flat")
-        new_proj_btn.connect("clicked", lambda _b: self.emit("new-project-requested"))
-        self._box.append(new_proj_btn)
 
         active = self._ws.active_projects
         for idx, project in enumerate(active):
@@ -324,21 +318,13 @@ class Sidebar(Gtk.ScrolledWindow):
         flash.set_sensitive(bool(project.flash_commands))
         flash.set_popover(self._build_flash_popover(project))
 
-        cog = Gtk.Button.new_from_icon_name("emblem-system-symbolic")
-        cog.add_css_class("flat")
-        cog.set_tooltip_text("Settings")
-        cog.connect(
-            "clicked",
-            lambda _b, p=project: self.emit("configure-project-requested", p),
-        )
-
         plus = Gtk.Button.new_from_icon_name("list-add-symbolic")
         plus.add_css_class("flat")
         plus.set_tooltip_text("New tab (right-click for web tab)")
         plus.connect("clicked", lambda _b, p=project: self.emit("new-tab-requested", p))
         self._attach_plus_right_click(plus, project)
 
-        for w in (chevron, label_btn, play, flash, cog, plus):
+        for w in (chevron, label_btn, play, flash, plus):
             row.append(w)
 
         gesture = Gtk.GestureClick()
