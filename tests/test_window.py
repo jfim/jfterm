@@ -27,6 +27,6 @@ def test_on_close_tab_is_noop_when_tab_is_restarting():
         _show_group_empty=lambda g: None,
     )
 
-    JFTermWindow._on_close_tab(fake_self, None, tab)
+    JFTermWindow._on_close_tab(fake_self, None, tab)  # pyright: ignore[reportArgumentType]
 
     assert tab in p.tabs, "tab should not be removed while is_restarting is True"
