@@ -87,3 +87,39 @@ def test_project_accepts_flash_commands():
     fc = FlashCommand(name="Push", command="git push", keep_open_on_success=True)
     p = Project(name="A", directory="/tmp/a", flash_commands=[fc])
     assert p.flash_commands == [fc]
+
+
+def test_project_archived_defaults_to_false():
+    p = Project(name="A", directory="/tmp/a")
+    assert p.archived is False
+
+
+def test_workspace_active_and_archived_views():
+    ws = Workspace()
+    a = ws.add_project(name="A", directory="/tmp/a")
+    b = ws.add_project(name="B", directory="/tmp/b")
+    c = ws.add_project(name="C", directory="/tmp/c")
+
+    b.archived = True
+
+    assert ws.active_projects == [a, c]
+    assert ws.archived_projects == [b]
+    assert ws.projects == [a, b, c]
+
+
+def test_unarchive_restores_position_in_active_view():
+    ws = Workspace()
+    a = ws.add_project(name="A", directory="/tmp/a")
+    b = ws.add_project(name="B", directory="/tmp/b")
+    c = ws.add_project(name="C", directory="/tmp/c")
+
+    b.archived = True
+    assert ws.active_projects == [a, c]
+
+    b.archived = False
+    assert ws.active_projects == [a, b, c]
+
+
+def test_workspace_archived_expanded_defaults_to_false():
+    ws = Workspace()
+    assert ws.archived_expanded is False
