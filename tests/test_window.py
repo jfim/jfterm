@@ -3,6 +3,7 @@
 We construct a minimal stand-in for the parts of JFTermWindow that
 _on_close_tab actually touches, and assert the early-return behaviour.
 """
+
 from types import SimpleNamespace
 
 from jfterm.models import Tab, Workspace
