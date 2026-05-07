@@ -139,6 +139,8 @@ class JFTermWindow(Adw.ApplicationWindow):
         )
 
     def _on_close_tab(self, _sb, tab: Tab) -> None:
+        if tab.is_restarting:
+            return
         group = self.ws._find_group(tab)
         was_visible = (
             tab.terminal is not None and self.terminal_stack.get_visible_child() is tab.terminal
