@@ -105,7 +105,11 @@ class JFTermWindow(Adw.ApplicationWindow):
         terminal = JFTermTerminal(cwd=cwd, send_after_spawn=command)
         terminal.set_vexpand(True)
         terminal.set_hexpand(True)
-        tab = Tab(title=command or "(starting…)", terminal=terminal)
+        tab = Tab(
+            title=command or "(starting…)",
+            terminal=terminal,
+            launched_command=command,
+        )
         terminal.connect(
             "cwd-changed",
             lambda _t, path, t=tab: self._on_tab_cwd_changed(t, path),
