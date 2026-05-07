@@ -57,6 +57,7 @@ class Sidebar(Gtk.ScrolledWindow):
         self._install_css()
 
         self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._box.set_vexpand(True)
         self._box.add_css_class("navigation-sidebar")
         self.set_child(self._box)
         self.refresh()
@@ -119,6 +120,9 @@ class Sidebar(Gtk.ScrolledWindow):
 
         archived = self._ws.archived_projects
         if archived:
+            spacer = Gtk.Box()
+            spacer.set_vexpand(True)
+            self._box.append(spacer)
             self._add_separator()
             self._add_archived_header()
             if self._ws.archived_expanded:
