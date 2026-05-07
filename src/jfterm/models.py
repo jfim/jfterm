@@ -41,6 +41,9 @@ class Tab:
     # Display name of the flash command this tab was launched with (None if
     # not a flash tab). Used to prefix the tab title with "⚡ {name}: ".
     flash_name: str | None = None
+    # True when launched from a project's startup commands. Used to prefix
+    # the tab title with "▶ ".
+    from_startup: bool = False
     # True while a restart is in flight, so the old terminal's child-exited
     # signal does not remove the tab from its group.
     is_restarting: bool = False
