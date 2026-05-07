@@ -75,9 +75,7 @@ async def test_list_tabs_unknown_project_raises():
 async def test_spawn_tab_returns_new_tab_and_records():
     ctrl = FakeController()
     ctrl.add_project("alpha", "/a")
-    result = await spawn_tab(
-        ctrl, SpawnTabInput(project_name="alpha", command="vim README.md")
-    )
+    result = await spawn_tab(ctrl, SpawnTabInput(project_name="alpha", command="vim README.md"))
     assert result["tab"]["title"] == "vim README.md"
     assert result["tab"]["project"] == "alpha"
     assert result["tab"]["launched_command"] == "vim README.md"

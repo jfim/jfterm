@@ -18,9 +18,7 @@ class ListProjectsInput(BaseModel):
     pass
 
 
-async def list_projects(
-    controller: MCPController, _params: ListProjectsInput
-) -> dict:
+async def list_projects(controller: MCPController, _params: ListProjectsInput) -> dict:
     return {"projects": [asdict(p) for p in controller.list_projects()]}
 
 
