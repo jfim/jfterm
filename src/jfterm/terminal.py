@@ -31,6 +31,7 @@ class JFTermTerminal(Vte.Terminal):
         "running-changed": (GObject.SignalFlags.RUN_FIRST, None, (bool,)),
         "title-changed": (GObject.SignalFlags.RUN_FIRST, None, (str,)),
         "progress-changed": (GObject.SignalFlags.RUN_FIRST, None, (int, int)),
+        "output-data": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
     }
 
     def __init__(
@@ -185,6 +186,7 @@ class JFTermTerminal(Vte.Terminal):
 
     def _on_proxy_data(self, _p, data: bytes) -> None:
         self.feed(data)
+        self.emit("output-data", data)
 
     def _on_proxy_progress(self, _p, state: int, value: int) -> None:
         self.emit("progress-changed", state, value)
