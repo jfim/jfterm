@@ -57,6 +57,9 @@ class TerminalTab(Tab):
     # Display name of the flash command this tab was launched with (None if
     # not a flash tab). Used to prefix the tab title with "⚡ {name}: ".
     flash_name: str | None = None
+    # Original (un-wrapped) flash command line, kept so the title can be
+    # restored when the shell echoes the wrap_flash_command form.
+    flash_original_command: str | None = None
     # True when launched from a project's startup commands. Used to prefix
     # the tab title with "▶ ".
     from_startup: bool = False
@@ -108,6 +111,7 @@ class LinkedTab(Tab):
     osc133_seen: bool = False
     launched_command: str | None = None
     flash_name: str | None = None
+    flash_original_command: str | None = None
     is_restarting: bool = False
     # True when launched from a project's startup commands. Used to prefix
     # the tab title with "▶ " (mirrors TerminalTab.from_startup).

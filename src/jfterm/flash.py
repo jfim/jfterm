@@ -20,3 +20,22 @@ def wrap_flash_command(fc: FlashCommand) -> str:
         "if [ $__ec -eq 0 ]; then exit; "
         'else echo "Command failed (exit $__ec)"; fi'
     )
+
+
+def unwrap_flash_title(title: str, original: str) -> str:
+    """Reverse `wrap_flash_command` for display purposes.
+
+    The shell echoes the wrapped command line into the window title, which
+    leaks the brace group and exit-code plumbing into the UI. If `title`
+    matches the wrapped form of `original`, return `original` so callers
+    can show the user what they actually typed.
+    """
+    if not title or not original:
+        return title
+    for keep_open in (False, True):
+        wrapped = wrap_flash_command(
+            FlashCommand(name="", command=original, keep_open_on_success=keep_open)
+        )
+        if title == wrapped:
+            return original
+    return title
