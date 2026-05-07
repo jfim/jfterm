@@ -85,3 +85,7 @@ If you don't want to install `just`, the recipes are thin wrappers around
 
 Pure-logic modules (models, persistence, matching) are covered by tests.
 GUI behavior is verified manually.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

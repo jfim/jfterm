@@ -6,6 +6,8 @@ authors = [
     { name = "Jean-Francois Im", email = "jeanfrancois.im@gmail.com" }
 ]
 requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = []
 
 [project.scripts]
