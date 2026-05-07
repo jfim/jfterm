@@ -96,6 +96,8 @@ class Launcher:
         window.set_content(box)
 
         key = Gtk.EventControllerKey()
+        # CAPTURE phase: see Escape before SearchEntry consumes it.
+        key.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         key.connect("key-pressed", self._on_key_pressed)
         window.add_controller(key)
 
