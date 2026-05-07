@@ -15,6 +15,9 @@ class AppSettings:
     mcp_enabled: bool = False
     mcp_host: str = "127.0.0.1"
     mcp_port: int = 7820
+    window_width: int = 1100
+    window_height: int = 700
+    window_maximized: bool = False
 
 
 def default_path() -> Path:
@@ -40,12 +43,23 @@ def load(path: Path) -> AppSettings:
         port = defaults.mcp_port
     if not (1 <= port <= 65535):
         port = defaults.mcp_port
+
+    def _positive_int(key: str, fallback: int) -> int:
+        try:
+            value = int(data.get(key, fallback))
+        except (TypeError, ValueError):
+            return fallback
+        return value if value > 0 else fallback
+
     return AppSettings(
         font_desc=str(data.get("font_desc", "")),
         palette_id=str(data.get("palette_id", "system")),
         mcp_enabled=bool(data.get("mcp_enabled", defaults.mcp_enabled)),
         mcp_host=str(data.get("mcp_host", defaults.mcp_host)),
         mcp_port=port,
+        window_width=_positive_int("window_width", defaults.window_width),
+        window_height=_positive_int("window_height", defaults.window_height),
+        window_maximized=bool(data.get("window_maximized", defaults.window_maximized)),
     )
 
 

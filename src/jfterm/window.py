@@ -44,13 +44,21 @@ if TYPE_CHECKING:
 class JFTermWindow(Adw.ApplicationWindow):
     def __init__(self, application: Adw.Application) -> None:
         super().__init__(application=application, title="JFTerm")
-        self.set_default_size(1100, 700)
 
         self.ws = Workspace()
         load_projects(self.ws, default_path())
 
         self._settings_path = default_settings_path()
         self._settings: AppSettings = load_settings(self._settings_path)
+
+        self.set_default_size(self._settings.window_width, self._settings.window_height)
+        if self._settings.window_maximized:
+            self.maximize()
+        self._window_save_source: int | None = None
+        self.connect("notify::default-width", self._on_window_geometry_changed)
+        self.connect("notify::default-height", self._on_window_geometry_changed)
+        self.connect("notify::maximized", self._on_window_geometry_changed)
+        self.connect("close-request", self._on_close_request)
 
         self.sidebar = Sidebar(self.ws)
         self.terminal_stack = Gtk.Stack()
@@ -1033,6 +1041,11 @@ class JFTermWindow(Adw.ApplicationWindow):
         dialog.present(self)
 
     def _on_settings_changed(self, _dialog, settings: AppSettings) -> None:
+        # Preferences dialog only edits its own subset of fields; carry the
+        # window geometry across so we don't clobber it on save.
+        settings.window_width = self._settings.window_width
+        settings.window_height = self._settings.window_height
+        settings.window_maximized = self._settings.window_maximized
         self._settings = settings
         try:
             save_settings(settings, self._settings_path)
@@ -1052,6 +1065,43 @@ class JFTermWindow(Adw.ApplicationWindow):
         visible = btn.get_active()
         self.sidebar.set_visible(visible)
         btn.set_tooltip_text("Hide sidebar" if visible else "Show sidebar")
+
+    def _on_window_geometry_changed(self, *_args) -> None:
+        from gi.repository import GLib
+
+        if self._window_save_source is not None:
+            GLib.source_remove(self._window_save_source)
+
+        def _flush() -> bool:
+            self._window_save_source = None
+            self._persist_window_geometry()
+            return False
+
+        self._window_save_source = GLib.timeout_add(500, _flush)
+
+    def _persist_window_geometry(self) -> None:
+        maximized = bool(self.is_maximized())
+        # default-width/height track the windowed size, not the maximized size,
+        # so they're the right values to restore on next launch.
+        width, height = self.get_default_size()
+        if width > 0:
+            self._settings.window_width = width
+        if height > 0:
+            self._settings.window_height = height
+        self._settings.window_maximized = maximized
+        try:
+            save_settings(self._settings, self._settings_path)
+        except OSError:
+            pass
+
+    def _on_close_request(self, _win) -> bool:
+        from gi.repository import GLib
+
+        if self._window_save_source is not None:
+            GLib.source_remove(self._window_save_source)
+            self._window_save_source = None
+        self._persist_window_geometry()
+        return False  # allow close
 
     def _on_paned_position_changed(self, _paned, _pspec) -> None:
         from gi.repository import GLib
