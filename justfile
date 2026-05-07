@@ -35,6 +35,11 @@ test *args:
 run:
     uv run python -m jfterm
 
+# Create the dev virtualenv (with system site packages for gi/PyGObject).
+venv:
+    uv venv --system-site-packages --python 3.12
+    uv sync
+
 # Sync dev dependencies.
 sync:
     uv sync
