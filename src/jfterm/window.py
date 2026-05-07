@@ -85,7 +85,9 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.sidebar.connect("dot-clicked", self._on_dot_clicked)
         self.sidebar.connect("tab-dropped", self._on_tab_dropped)
         self.sidebar.connect("unarchive-project-requested", self._on_unarchive_project)
-        self.sidebar.connect("toggle-archived-expanded-requested", self._on_toggle_archived_expanded)
+        self.sidebar.connect(
+            "toggle-archived-expanded-requested", self._on_toggle_archived_expanded
+        )
 
         # Keyboard shortcuts
         from jfterm.shortcuts import install as install_shortcuts

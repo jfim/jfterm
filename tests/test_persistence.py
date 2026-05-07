@@ -139,9 +139,7 @@ def test_load_missing_archived_field_defaults_to_false(tmp_path: Path):
         json.dumps(
             {
                 "version": 1,
-                "projects": [
-                    {"id": "x", "name": "A", "directory": "/tmp/a", "expanded": True}
-                ],
+                "projects": [{"id": "x", "name": "A", "directory": "/tmp/a", "expanded": True}],
             }
         )
     )

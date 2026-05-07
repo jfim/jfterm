@@ -394,16 +394,11 @@ def show_project_dialog(
                 transient_for=dlg,
                 modal=True,
                 heading=f"Archive {initial_name or 'project'}?",
-                body=(
-                    f"This will close {n_open_tabs} tab"
-                    f"{'s' if n_open_tabs != 1 else ''}."
-                ),
+                body=(f"This will close {n_open_tabs} tab{'s' if n_open_tabs != 1 else ''}."),
             )
             confirm.add_response("cancel", "Cancel")
             confirm.add_response("archive", "Archive")
-            confirm.set_response_appearance(
-                "archive", Adw.ResponseAppearance.DESTRUCTIVE
-            )
+            confirm.set_response_appearance("archive", Adw.ResponseAppearance.DESTRUCTIVE)
             confirm.set_default_response("cancel")
             confirm.set_close_response("cancel")
 
