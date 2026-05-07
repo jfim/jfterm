@@ -490,4 +490,11 @@ def show_new_web_tab_dialog(
         on_confirm(url)
 
     dialog.connect("response", _on_response)
+
+    def _on_activate(_e: Gtk.Entry) -> None:
+        dialog.response("ok")
+
+    entry.connect("activate", _on_activate)
     dialog.present(parent)
+    entry.grab_focus()
+    entry.set_position(-1)
