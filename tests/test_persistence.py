@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from jfterm.models import Workspace
+from jfterm.models import FlashCommand, Workspace
 from jfterm.persistence import load_projects, save_projects
 
 
@@ -63,3 +63,45 @@ def test_unknown_fields_are_preserved(tmp_path: Path):
 
     data = json.loads(path.read_text())
     assert data["projects"][0]["future_field"] == {"x": 1}
+
+
+def test_flash_commands_roundtrip(tmp_path: Path):
+    ws = Workspace()
+    p = ws.add_project(name="A", directory="/tmp/a")
+    p.flash_commands = [
+        FlashCommand(name="Push", command="git push"),
+        FlashCommand(
+            name="Check",
+            command="just check",
+            keep_open_on_success=True,
+            focus_on_launch=False,
+        ),
+    ]
+
+    path = tmp_path / "projects.json"
+    save_projects(ws, path)
+    ws2 = Workspace()
+    load_projects(ws2, path)
+
+    fcs = ws2.projects[0].flash_commands
+    assert [(f.name, f.command, f.keep_open_on_success, f.focus_on_launch) for f in fcs] == [
+        ("Push", "git push", False, True),
+        ("Check", "just check", True, False),
+    ]
+
+
+def test_load_missing_flash_commands_defaults_to_empty(tmp_path: Path):
+    path = tmp_path / "projects.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "projects": [
+                    {"id": "x", "name": "A", "directory": "/tmp/a", "expanded": True}
+                ],
+            }
+        )
+    )
+    ws = Workspace()
+    load_projects(ws, path)
+    assert ws.projects[0].flash_commands == []
