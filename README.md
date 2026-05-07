@@ -37,6 +37,25 @@ System libraries (Ubuntu 24.04 — adjust package names for other distros):
         libvte-2.91-gtk4-0 \
         python3-gi python3-cairo
 
+On Ubuntu 24.04, web tabs additionally need an AppArmor profile that
+allows `bwrap` (WebKit's sandbox helper) to use unprivileged user
+namespaces — without it, web tabs fail to start with a `bwrap: setting up
+uid map: Permission denied` error. The minimal scoped fix:
+
+    sudo tee /etc/apparmor.d/bwrap > /dev/null <<'EOF'
+    abi <abi/4.0>,
+    include <tunables/global>
+
+    profile bwrap /usr/bin/bwrap flags=(unconfined) {
+      userns,
+      include if exists <local/bwrap>
+    }
+    EOF
+    sudo apparmor_parser -r /etc/apparmor.d/bwrap
+
+This grants user-namespace use to `/usr/bin/bwrap` only; the rest of the
+system stays restricted.
+
 Then either install it as a desktop application (recommended — adds an
 application-menu launcher that pins cleanly to the dock):
 
