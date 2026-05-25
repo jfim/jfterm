@@ -41,15 +41,16 @@ def test_on_project_dropped_reorders_and_persists(tmp_path, monkeypatch):
 
     saves: list[Workspace] = []
     monkeypatch.setattr(persistence, "default_path", lambda: tmp_path / "p.json")
-    monkeypatch.setattr(
-        "jfterm.window.save_projects",
-        lambda workspace, path: saves.append(workspace),
-    )
+
+    class FakeSaver:
+        def schedule(self) -> None:
+            saves.append(ws)
 
     refreshes: list[int] = []
     fake_self = SimpleNamespace(
         ws=ws,
         sidebar=SimpleNamespace(refresh=lambda: refreshes.append(1)),
+        _project_saver=FakeSaver(),
     )
 
     JFTermWindow._on_project_dropped(fake_self, None, c, 0)  # pyright: ignore[reportArgumentType]

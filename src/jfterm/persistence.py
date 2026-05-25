@@ -71,9 +71,14 @@ def load_projects(ws: Workspace, path: Path) -> None:
     ws.archived_expanded = bool(data.get("archived_expanded", False))
 
 
-def save_projects(ws: Workspace, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
+def build_payload(ws: Workspace) -> dict:
+    """Build a JSON-serializable snapshot of the workspace.
+
+    This must be called on the thread that owns ``ws`` (the GTK main thread).
+    The returned dict contains only plain Python types and is safe to pass to a
+    worker thread for encoding and writing.
+    """
+    return {
         "version": 1,
         "projects": [
             {
@@ -103,9 +108,21 @@ def save_projects(ws: Workspace, path: Path) -> None:
         "archived_expanded": ws.archived_expanded,
         "sidebar_width": ws.sidebar_width,
     }
+
+
+def write_payload(payload: dict, path: Path) -> None:
+    """Encode ``payload`` as JSON and atomically write it to ``path``.
+
+    Safe to call from any thread — touches no GTK state.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2))
     tmp.replace(path)
+
+
+def save_projects(ws: Workspace, path: Path) -> None:
+    write_payload(build_payload(ws), path)
 
 
 def default_path() -> Path:

@@ -27,7 +27,8 @@ from jfterm.models import (  # noqa: E402
     WebTab,
     Workspace,
 )
-from jfterm.persistence import default_path, load_projects, save_projects  # noqa: E402
+from jfterm.persistence import default_path, load_projects  # noqa: E402
+from jfterm.project_saver import ProjectSaver  # noqa: E402
 from jfterm.preferences import AppPreferencesDialog  # noqa: E402
 from jfterm.settings import (  # noqa: E402
     AppSettings,
@@ -48,6 +49,7 @@ class JFTermWindow(Adw.ApplicationWindow):
 
         self.ws = Workspace()
         load_projects(self.ws, default_path())
+        self._project_saver = ProjectSaver(self.ws, default_path())
 
         self._settings_path = default_settings_path()
         self._settings: AppSettings = load_settings(self._settings_path)
@@ -706,7 +708,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             p.startup_commands = commands
             p.spawn_blank_after_startup = spawn_blank_after_startup
             p.flash_commands = flash_commands
-            save_projects(self.ws, default_path())
+            self._project_saver.schedule()
             self.sidebar.refresh()
             self._refresh_empty_state()
 
@@ -727,7 +729,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             project.startup_commands = commands
             project.spawn_blank_after_startup = spawn_blank_after_startup
             project.flash_commands = flash_commands
-            save_projects(self.ws, default_path())
+            self._project_saver.schedule()
             self.sidebar.refresh()
 
         def _disband() -> None:
@@ -805,7 +807,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.ws.disband(project)
         if self._current_group is project:
             self._current_group = self.ws.unsorted
-        save_projects(self.ws, default_path())
+        self._project_saver.schedule()
         self.sidebar.refresh()
         self._refresh_empty_state()
 
@@ -818,19 +820,19 @@ class JFTermWindow(Adw.ApplicationWindow):
         project.archived = True
         if self._current_group is project:
             self._show_empty(self.ws.unsorted)
-        save_projects(self.ws, default_path())
+        self._project_saver.schedule()
         self.sidebar.refresh()
         self._refresh_empty_state()
 
     def _on_unarchive_project(self, _sb, project: Project) -> None:
         project.archived = False
-        save_projects(self.ws, default_path())
+        self._project_saver.schedule()
         self.sidebar.refresh()
         self._refresh_empty_state()
 
     def _on_toggle_archived_expanded(self, _sb) -> None:
         self.ws.archived_expanded = not self.ws.archived_expanded
-        save_projects(self.ws, default_path())
+        self._project_saver.schedule()
         self.sidebar.refresh()
 
     def _on_launch_project(self, _sb, project: Project) -> None:
@@ -838,7 +840,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             return
         if not project.expanded:
             project.expanded = True
-            save_projects(self.ws, default_path())
+            self._project_saver.schedule()
             self.sidebar.refresh()
         from gi.repository import GLib
 
@@ -921,7 +923,7 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _on_flash_command_launched(self, _sb, project: Project, fc: FlashCommand) -> None:
         if not project.expanded:
             project.expanded = True
-            save_projects(self.ws, default_path())
+            self._project_saver.schedule()
             self.sidebar.refresh()
 
         from jfterm.linked import parse_linked
@@ -966,7 +968,7 @@ class JFTermWindow(Adw.ApplicationWindow):
 
     def _on_toggle_expanded(self, _sb, group: Group) -> None:
         group.expanded = not group.expanded
-        save_projects(self.ws, default_path())
+        self._project_saver.schedule()
         self.sidebar.refresh()
 
     def _on_dot_clicked(self, _sb, tab: TerminalTab, current_group: Group, anchor) -> None:
@@ -1005,7 +1007,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         if src_idx < position:
             adjusted -= 1
         self.ws.move_project(project, adjusted)
-        save_projects(self.ws, default_path())
+        self._project_saver.schedule()
         self.sidebar.refresh()
 
     def _on_tab_cwd_changed(self, tab: TerminalTab | LinkedTab, path: str) -> None:
@@ -1303,6 +1305,8 @@ class JFTermWindow(Adw.ApplicationWindow):
             GLib.source_remove(self._window_save_source)
             self._window_save_source = None
         self._persist_window_geometry()
+        # Block briefly so any queued project-save lands before we exit.
+        self._project_saver.flush(timeout=5.0)
         return False  # allow close
 
     def _on_paned_position_changed(self, _paned, _pspec) -> None:
@@ -1313,7 +1317,7 @@ class JFTermWindow(Adw.ApplicationWindow):
             GLib.source_remove(self._sidebar_save_source)
 
         def _flush() -> bool:
-            save_projects(self.ws, default_path())
+            self._project_saver.schedule()
             self._sidebar_save_source = None
             return False
 
