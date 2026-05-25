@@ -143,6 +143,22 @@ The server binds to localhost only and has no authentication. It is
 disabled by default — enable it and pick a port from the preferences
 pane.
 
+## Debugging UI freezes
+
+If JFTerm's window becomes unresponsive (won't drag, terminals stop
+repainting), something is blocking the GLib main loop. Set
+`JFTERM_WATCHDOG_MS` to a stall threshold in milliseconds before
+launching to capture a traceback of every Python thread the moment the
+stall happens:
+
+    JFTERM_WATCHDOG_MS=250 jfterm
+
+Dumps are appended to `$XDG_CACHE_HOME/jfterm/watchdog.log` (defaults to
+`~/.cache/jfterm/watchdog.log`). Each entry includes the measured lag
+and tracebacks for all threads — the main thread's stack reveals what
+was running when the loop stalled. Unset or set to `0` to disable
+(zero runtime cost).
+
 ## Development
 
 Common dev tasks are wrapped as [`just`](https://github.com/casey/just)
