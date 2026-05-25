@@ -7,6 +7,7 @@ gi.require_version("Graphene", "1.0")
 
 from gi.repository import Adw, Gio  # noqa: E402
 
+from jfterm.watchdog import install_watchdog  # noqa: E402
 from jfterm.window import JFTermWindow  # noqa: E402
 
 
@@ -23,4 +24,5 @@ class JFTermApp(Adw.Application):
 
 
 def main() -> int:
+    install_watchdog()
     return JFTermApp().run(None)
