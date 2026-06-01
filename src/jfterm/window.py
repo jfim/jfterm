@@ -1107,10 +1107,12 @@ class JFTermWindow(Adw.ApplicationWindow):
         )
 
     def mcp_spawn_tab(self, project_name: str, command: str) -> TabInfo:
-        from jfterm.mcp_types import EmptyCommand, ProjectNotFound
+        from jfterm.mcp_types import ControlCharInCommand, EmptyCommand, ProjectNotFound
 
         if not command:
             raise EmptyCommand()
+        if any(c in command for c in (chr(i) for i in range(0x20) if i != 0x09)):
+            raise ControlCharInCommand()
         group = next((g for g in self.ws.all_groups() if g.name == project_name), None)
         if group is None:
             raise ProjectNotFound(project_name)
