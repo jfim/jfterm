@@ -1,10 +1,13 @@
 import json
+import logging
 import os
 import sys
 import tempfile
 from pathlib import Path
 
 from jfterm.models import FlashCommand, Project, StartupCommand, Workspace
+
+log = logging.getLogger(__name__)
 
 _KNOWN_FIELDS = {
     "id",
@@ -59,6 +62,9 @@ def load_projects(ws: Workspace, path: Path) -> None:
         print(f"jfterm: ignoring malformed {path}: {e}", file=sys.stderr)
         return
     for entry in data.get("projects", []):
+        if not all(k in entry for k in ("id", "name", "directory")):
+            log.warning("Skipping malformed project entry missing required keys: %r", entry)
+            continue
         p = Project(
             id=entry["id"],
             name=entry["name"],
