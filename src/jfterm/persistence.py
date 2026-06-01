@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
 
@@ -52,7 +53,11 @@ def _load_flash_commands(raw: list) -> list[FlashCommand]:
 def load_projects(ws: Workspace, path: Path) -> None:
     if not path.exists():
         return
-    data = json.loads(path.read_text())
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"jfterm: ignoring malformed {path}: {e}", file=sys.stderr)
+        return
     for entry in data.get("projects", []):
         p = Project(
             id=entry["id"],
