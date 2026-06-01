@@ -49,6 +49,10 @@ class EmptyCommand(MCPError):
     pass
 
 
+class ControlCharInCommand(MCPError):
+    pass
+
+
 class EmptyUrl(MCPError):
     pass
 
