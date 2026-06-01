@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 from pathlib import Path
 
 from jfterm.models import FlashCommand, Project, StartupCommand, Workspace
@@ -116,9 +117,9 @@ def write_payload(payload: dict, path: Path) -> None:
     Safe to call from any thread — touches no GTK state.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2))
-    tmp.replace(path)
+    with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as tmp:
+        tmp.write(json.dumps(payload, indent=2))
+    os.replace(tmp.name, path)
 
 
 def save_projects(ws: Workspace, path: Path) -> None:
