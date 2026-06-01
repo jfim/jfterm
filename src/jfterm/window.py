@@ -1467,3 +1467,5 @@ class JFTermWindow(Adw.ApplicationWindow):
             self._on_launch_project(self.sidebar, action.project)
         elif isinstance(action, JumpAction):
             self._on_tab_activated(self.sidebar, action.tab)
+        else:
+            raise TypeError(f"unhandled launcher action: {action!r}")
