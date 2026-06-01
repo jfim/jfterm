@@ -1124,6 +1124,8 @@ class JFTermWindow(Adw.ApplicationWindow):
 
         if not url:
             raise EmptyUrl()
+        if not url.startswith(("http://", "https://")):
+            raise EmptyUrl()
         group = next((g for g in self.ws.all_groups() if g.name == project_name), None)
         if group is None:
             raise ProjectNotFound(project_name)
