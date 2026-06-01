@@ -19,11 +19,11 @@ def _is_boundary(candidate: str, j: int) -> bool:
     return prev.islower() and cur.isupper()
 
 
-def _matches(q: str, c: str, candidate: str, j: int) -> bool:
-    if q.lower() != c.lower():
+def _matches(q: str, q_lower: str, c_lower: str, candidate: str, j: int) -> bool:
+    if q_lower != c_lower:
         return False
     if q.isupper():
-        return c.isupper() or _is_boundary(candidate, j)
+        return candidate[j].isupper() or _is_boundary(candidate, j)
     return True
 
 
@@ -38,11 +38,19 @@ def score(query: str, candidate: str) -> int | None:
     n, m = len(query), len(candidate)
     if n > m:
         return None
+    # Lower-case each character once, preserving one entry per source
+    # index. Indexing the original positions stays correct even for
+    # characters whose lowercase expands to multiple code points (e.g.
+    # 'İ' -> 'i' + combining dot); a whole-string .lower() would shift
+    # every later index and corrupt the match.
+    query_lower = [ch.lower() for ch in query]
+    candidate_lower = [ch.lower() for ch in candidate]
     NEG = -1
     prev = [NEG] * m
     q0 = query[0]
+    q0_lower = query_lower[0]
     for j in range(m):
-        if _matches(q0, candidate[j], candidate, j):
+        if _matches(q0, q0_lower, candidate_lower[j], candidate, j):
             bonus = BOUNDARY if _is_boundary(candidate, j) else 0
             prev[j] = BASE + bonus
     if n == 1:
@@ -51,13 +59,14 @@ def score(query: str, candidate: str) -> int | None:
     for i in range(2, n + 1):
         cur = [NEG] * m
         qi = query[i - 1]
+        qi_lower = query_lower[i - 1]
         running_best_prev = NEG
         running_best_prev_j = -1
         for j in range(m):
             if j > 0 and prev[j - 1] > running_best_prev:
                 running_best_prev = prev[j - 1]
                 running_best_prev_j = j - 1
-            if not _matches(qi, candidate[j], candidate, j):
+            if not _matches(qi, qi_lower, candidate_lower[j], candidate, j):
                 continue
             if running_best_prev == NEG:
                 continue
