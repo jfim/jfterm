@@ -81,8 +81,17 @@ anything).
 
 ## Session model (daemon-side)
 
-Keyed by a `session_id` the client assigns — reusing the tab's existing uuid
-(`Tab.id`), so a persisted tab and its daemon session share a key for free.
+Keyed by a `session_id` the client assigns. This is a **mutable per-tab pointer,
+not the tab's own identity**: each terminal-bearing tab persists a `session_id`
+field (defaulting to a fresh uuid) alongside its structural `Tab.id`, and points
+at exactly one session at a time. Decoupling the two is what lets **restart** keep
+a tab — its sidebar row, group, and position — while swapping in a fresh shell
+under a new `session_id`; the old, still-draining session keeps its old key until
+the daemon reaps it, so the new shell never collides with it. The persisted
+`session_id` is also the **reattach mapping**: on launch the client walks the
+persisted structure and, per tab, attaches that tab's `session_id` if it is live
+(else opens fresh), so sessions land back in their tabs at their positions
+without the daemon ever knowing about tabs or positions.
 
 A `Session` owns:
 
@@ -96,7 +105,14 @@ A `Session` owns:
   region, charset, cursor color, OSC 7 cwd, OSC 0/2 title), serializable to a
   canonical re-assertion byte string.
 - **`StatusCache`** — last semantic `running` (OSC 133) and `progress` (OSC 9;4)
-  values. These drive JFTerm's status dot and never ride the ring.
+  values. These drive JFTerm's status dot and never ride the ring. For shells
+  without OSC 133 prompt marking, `running` falls back to a `tcgetpgrp(master) !=
+  shell_pid` check the daemon polls on a timer; the first OSC 133 marker for a
+  session wins and permanently disables that session's poll (mirroring the
+  client's old fallback). The poll is **gated on an attached client** — the dot is
+  only visible when attached — and pauses while detached. Either source updates
+  `StatusCache` and pushes a `STATUS` frame, so the client never polls and needs
+  no new wire message.
 - **`client`** — the currently attached connection (v1: at most one; takeover on
   re-attach).
 
@@ -106,13 +122,21 @@ A `Session` owns:
 binding frame (see Protocol), not separate wire frames.
 
 - **Create (OPEN)** — `ATTACH_OR_OPEN` for an unknown `session_id` → daemon
-  `forkpty`s the shell, sets `TERM=xterm-256color`, begins draining into the ring
-  immediately.
+  `forkpty`s the shell, sets `TERM=xterm-256color` and `COLORTERM=truecolor`
+  (fixed emulator-capability env; JFTerm has no per-tab custom env today — if it
+  ever does, those vars ride `ATTACH_OR_OPEN` next to `argv`/`cwd`), begins
+  draining into the ring immediately.
 - **Attach (ATTACH)** — `ATTACH_OR_OPEN` for a known `session_id` → replay
   handshake (see Protocol), then live frames.
 - **Detach** — client disconnects (clean or crash). Session keeps running; ring
   keeps filling. No data lost.
-- **Close (kill)** — `CLOSE{session_id}` → SIGHUP the shell, reap, drop session.
+- **Close (kill)** — `CLOSE{signal, grace_ms}` → daemon sends `signal` to the
+  shell, drops the session from the attachable map immediately, then reaps in the
+  background. If `grace_ms > 0` and the child has not exited by then, it escalates
+  to `SIGKILL` before reaping. The escalation lives in the daemon because only it
+  watches SIGCHLD — the client cannot observe when the child actually dies. Normal
+  tab/window close uses `{SIGHUP, 0}` (no escalation); **restart** uses
+  `{SIGTERM, 1500}`.
 - **Shell exits while detached** — session enters a `dead` state retaining its
   ring until reattach or a grace timeout; reattach replays the final output +
   `EXIT`, then the session is dropped.
@@ -161,6 +185,23 @@ the parser drops the following from the stored `data` (they are live-only):
   cursor-position reports. On replay VTE would generate responses; if routed back
   as `INPUT` they would inject spurious bytes into the shell. Must never replay.
 
+### Replay vs. live is a daemon decision, not a client one
+
+The client never needs to know "replay is done" — it feeds every `DATA` frame
+into VTE identically. The boundary is enforced muxer-side by *what the bytes
+contain*, fixed by ordering at attach:
+
+1. The daemon snapshots the ring end, then sends prologue + selected chunk data up
+   to that point — all **sanitized**, so a replayed BEL / OSC 52 / notification /
+   DSR isn't in the bytes at all.
+2. Everything produced *after* the snapshot streams **verbatim** as live `DATA`.
+
+So a BEL only reaches VTE in a live frame, where it rings normally; a BEL already
+in scrollback was stripped when stored and never replays. Output arriving *during*
+the replay window is appended to the ring (sanitized) and forwarded to this client
+as live (raw) once the replay frames flush — it counts as live, so its bell rings.
+No in-band "end of replay" marker is required.
+
 ## Wire protocol (TLV over the Unix socket)
 
 Every message is one TLV frame:
@@ -190,7 +231,7 @@ every frame), plus one control connection per client.
 | `ATTACH_OR_OPEN` | C→D | `{session_id, cwd, argv, want_chunks, cols, rows}` — attach if exists, else open; race-free |
 | `INPUT` | C→D | raw keystroke bytes |
 | `RESIZE` | C→D | `{cols, rows}` |
-| `CLOSE` | C→D | kill shell + drop session |
+| `CLOSE` | C→D | `{signal, grace_ms}` — signal the shell + drop session; daemon escalates to SIGKILL after `grace_ms` if still alive |
 | `DATA` | D→C | raw output bytes (feed into VTE) |
 | `STATUS` | D→C | `{running, progress}` — semantic dot state |
 | `EXIT` | D→C | `{status}` — shell child exited |
@@ -227,13 +268,13 @@ GObject signals (`data-ready`, `progress-changed`, `running-changed`,
 
 - Owns one UDS session connection, watched via `GLib.unix_fd_add` (mirroring how
   `PtyProxy` watched the PTY fd today).
-- Binds with `ATTACH_OR_OPEN{session_id=tab.id, …}`.
+- Binds with `ATTACH_OR_OPEN{session_id=tab.session_id, …}`.
 - Re-emits `DATA`→`data-ready`, `STATUS`→`progress-changed`/`running-changed`,
   `EXIT`→`child-exited`. `write()`→`INPUT`; size-allocate→`RESIZE`; tab
   close→`CLOSE`; socket drop→detach.
 
 `terminal.py` change is tiny: swap `self._proxy = PtyProxy(cwd, [shell,"-l"])` for
-`RemotePtyProxy(session_id=self.tab_id, cwd=…, argv=…)`. Every existing signal
+`RemotePtyProxy(session_id=tab.session_id, cwd=…, argv=…)`. Every existing signal
 handler stays as-is (`_on_proxy_data`→`feed`, etc.).
 
 ### Launch reconciliation
@@ -246,6 +287,20 @@ the union of persisted tabs and live sessions:
 | yes | yes | **ATTACH** → replay ("as if nothing happened") |
 | yes | no | **OPEN fresh** → re-run `launched_command` if any (daemon was restarted/rebooted; today's cold-start behavior) |
 | no | yes | **Adopt orphan** → materialize a recovered tab in **Unsorted** and ATTACH (never silently lose a running shell) |
+
+### Restart (client-side)
+
+Restart keeps the tab — its `Tab.id`, sidebar row, group, and position — and
+replaces the shell. The client sends `CLOSE{SIGTERM, 1500}` for the old
+`session_id`, mints a new `session_id` and points the tab at it, binds a fresh
+session with `ATTACH_OR_OPEN` (an OPEN, since the id is new) and re-runs
+`launched_command`, then persists the swap. The new terminal appears immediately
+while the old child dies in the background — matching today's eager-swap UI — and
+because the new session has a different id it never collides with the
+still-draining old one. The `session_id` swap is persisted **promptly**, not only
+on the debounced background save, so a crash mid-restart cannot reload the stale
+id and reattach to the dying shell (a benign failure — replayed final output +
+`EXIT` — but avoidable).
 
 ### Exit policy (client-side)
 
@@ -262,6 +317,40 @@ socket on `ECONNREFUSED` and re-spawn). If spawn fails, terminal creation surfac
 an error. (A later resilience option — `RemotePtyProxy` falling back to an
 in-process `PtyProxy` with no persistence — is out of scope to avoid dual code
 paths.)
+
+## Muxer-side responsibilities (jftermd)
+
+Consolidated checklist of what the daemon must implement; details live in the
+sections above, and the client half is summarized under "Client integration."
+jftermd lives in its own repo, so this section is the implementation contract.
+
+- **Lifecycle & sessions:** `forkpty` a shell per `ATTACH_OR_OPEN` of an unknown
+  id; set `TERM=xterm-256color` + `COLORTERM=truecolor`; drain the master
+  continuously into the ring whether or not a client is attached; reap via
+  SIGCHLD; enter `dead` (ring retained) on shell exit while detached; self-exit a
+  short grace period after the last session ends.
+- **CLOSE with escalation:** on `CLOSE{signal, grace_ms}`, send `signal`, drop the
+  session from the attachable map immediately, reap in the background, and
+  escalate to `SIGKILL` after `grace_ms` if the child has not exited. The daemon
+  owns the escalation because only it observes SIGCHLD.
+- **Chunk ring & sanitization:** 128 KB soft, ground-state-cut chunks; per-chunk
+  synthesized `state_prologue`; purge-on-clear; strip OSC 52 / OSC 9 / OSC 777 /
+  BEL / DSR / DA / cursor-reports from *stored* data while passing them live.
+- **Replay ordering:** snapshot ring end at attach, send prologue + sanitized
+  chunk data, then stream live verbatim (see "Replay vs. live").
+- **Status:** maintain `StatusCache` from OSC 133 + OSC 9;4; for shells without
+  OSC 133, fall back to an **attach-gated** `tcgetpgrp` poll that the first 133
+  marker permanently disables; push `STATUS` frames (the client never polls).
+- **Protocol:** TLV framing; control connection (`HELLO`/`LIST`); per-session
+  connection (`ATTACH_OR_OPEN`/`INPUT`/`RESIZE`/`CLOSE` ↔ `DATA`/`STATUS`/`EXIT`);
+  validate `proto_version` in `HELLO` and reject mismatches.
+- **Concurrency & robustness:** bounded per-session out-queue, drop slow clients
+  (forced detach) without stalling the shell; most-recent-wins takeover on a
+  second attach; atomic socket `bind()` + `flock` to resolve spawn races; unlink a
+  stale socket on `ECONNREFUSED`; SIGWINCH the shell's process group on
+  resize/attach.
+- **Security:** socket under `$XDG_RUNTIME_DIR/jfterm/` (`0700`), socket `0600`;
+  single-user, no in-band auth.
 
 ## Error handling & edge cases
 
@@ -296,7 +385,9 @@ integration tests for the I/O loop and sockets.
   break ground-state detection; the action classifier drops
   OSC 52 / 9 / 777 / BEL / DSR / DA / cursor-report from the ring while passing
   them live.
-- `StatusCache`: latest running/progress tracked; `STATUS` snapshot reflects them.
+- `StatusCache`: latest running/progress tracked; `STATUS` snapshot reflects
+  them; the `tcgetpgrp` fallback drives `running` until the first OSC 133 marker,
+  which then disables that session's poll.
 
 **Correctness oracle — `vt100` (Rust, dev/test only):** feed an original byte
 stream into `vt100` → grid A; feed our replay (prologue + sanitized data from the
@@ -308,8 +399,10 @@ design.
 socket, `bash --norc`):
 
 - Lifecycle: `OPEN` drains into the ring before any attach; `ATTACH` replays;
-  `CLOSE` kills + reaps; socket drop detaches without killing; shell-exit-while-
-  detached retains a `dead` session whose reattach replays final output + `EXIT`.
+  `CLOSE{SIGHUP,0}` reaps without escalation while `CLOSE{SIGTERM,grace}` escalates
+  to SIGKILL when the child ignores SIGTERM; socket drop detaches without killing;
+  shell-exit-while-detached retains a `dead` session whose reattach replays final
+  output + `EXIT`.
 - Protocol: TLV encode/decode round-trip; malformed frame closes the connection;
   `proto_version` mismatch rejected; `ATTACH_OR_OPEN` attaches-vs-opens.
 - Concurrency: backpressure drops a stalled client without disturbing the shell;
