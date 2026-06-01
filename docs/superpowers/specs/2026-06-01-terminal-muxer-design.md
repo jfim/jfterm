@@ -55,8 +55,21 @@ groups, or webviews — those stay entirely client-side.
   the sticky-state machine, status cache, and action classifier become one
   `Perform` impl on top of it, removing most from-scratch parsing risk.
 
-**Cost (accepted):** the repo becomes bilingual; `just install` and source builds
-gain a `cargo build --release` step and a Rust toolchain dependency.
+### Repository layout
+
+`jftermd` lives in its **own repo** (`jfterm-muxer`) with its own `cargo` build
+and CI — a Python change in JFTerm never triggers Rust tests, and vice versa. The
+**protocol is the contract** between the two repos: this TLV spec plus
+`proto_version` is owned canonically by the muxer repo (its README / a
+`PROTOCOL.md`), and JFTerm codes against that version. The coupling is
+deliberately narrow, so the boundary stays honest and the daemon remains reusable
+by any terminal.
+
+JFTerm depends only on the `jftermd` **binary being on `PATH`**: it `exec`s it for
+the self-spawn (a single static binary, no interpreter/venv). JFTerm's
+`just install` verifies `jftermd` is present and points at the muxer repo's build
+rather than compiling Rust itself; the muxer repo owns its own
+`cargo build --release` / install flow.
 
 Stack: **Rust + `tokio`** (async `UnixListener`, `AsyncFd` on the PTY master,
 `tokio::signal` for SIGCHLD reaping) + **`nix`** (`forkpty`, `TIOCSWINSZ`,
