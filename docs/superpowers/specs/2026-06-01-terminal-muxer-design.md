@@ -82,16 +82,20 @@ anything).
 ## Session model (daemon-side)
 
 Keyed by a `session_id` the client assigns. This is a **mutable per-tab pointer,
-not the tab's own identity**: each terminal-bearing tab persists a `session_id`
-field (defaulting to a fresh uuid) alongside its structural `Tab.id`, and points
-at exactly one session at a time. Decoupling the two is what lets **restart** keep
-a tab — its sidebar row, group, and position — while swapping in a fresh shell
-under a new `session_id`; the old, still-draining session keeps its old key until
-the daemon reaps it, so the new shell never collides with it. The persisted
-`session_id` is also the **reattach mapping**: on launch the client walks the
-persisted structure and, per tab, attaches that tab's `session_id` if it is live
-(else opens fresh), so sessions land back in their tabs at their positions
-without the daemon ever knowing about tabs or positions.
+not the tab's own identity**: a terminal-bearing tab carries a `session_id` and
+points at exactly one session at a time, distinct from its structural `Tab.id`.
+Decoupling the two is what lets **restart** keep a tab while swapping in a fresh
+shell under a new `session_id` — the old, still-draining session keeps its key
+until the daemon reaps it, so the new shell never collides.
+
+**v1 scope:** JFTerm does not persist tabs yet, so the **daemon's live session
+list is the source of truth for what to restore**. On launch the client `LIST`s
+sessions and adopts every one as a tab in **Unsorted**, attaching by `session_id`
+and replaying. `session_id` is therefore a runtime field (assigned at OPEN,
+rediscovered from `LIST` on relaunch), not persisted to disk. Persisting it
+alongside tab structure — so sessions reattach into their original
+project/group and position — is the deferred follow-up described under Launch
+reconciliation.
 
 A `Session` owns:
 
@@ -279,8 +283,16 @@ handler stays as-is (`_on_proxy_data`→`feed`, etc.).
 
 ### Launch reconciliation
 
-On launch the client opens the control connection, sends `LIST`, and reconciles
-the union of persisted tabs and live sessions:
+**v1 (no tab persistence):** on launch the client opens the control connection,
+sends `LIST`, and **adopts every live session as a tab in Unsorted**, attaching
+by `session_id` and replaying. Because tabs are not persisted, project/group
+membership and order are not restored — a relaunched JFTerm shows all surviving
+shells in Unsorted. The existing manual "launch project" flow is unchanged; its
+spawned shells simply reappear in Unsorted after an app restart.
+
+**v2 (tree-position restore, deferred):** once tabs persist their `session_id`
+and structural placement, launch reconciles the union of persisted tabs and live
+sessions, restoring each into its original group/position:
 
 | Persisted tab? | Live session? | Action |
 |---|---|---|
@@ -294,20 +306,24 @@ Restart keeps the tab — its `Tab.id`, sidebar row, group, and position — and
 replaces the shell. The client sends `CLOSE{SIGTERM, 1500}` for the old
 `session_id`, mints a new `session_id` and points the tab at it, binds a fresh
 session with `ATTACH_OR_OPEN` (an OPEN, since the id is new) and re-runs
-`launched_command`, then persists the swap. The new terminal appears immediately
-while the old child dies in the background — matching today's eager-swap UI — and
-because the new session has a different id it never collides with the
-still-draining old one. The `session_id` swap is persisted **promptly**, not only
+`launched_command`. The new terminal appears immediately while the old child dies
+in the background — matching today's eager-swap UI — and because the new session
+has a different id it never collides with the still-draining old one. (When tab
+persistence lands in v2, the `session_id` swap is persisted **promptly**, not only
 on the debounced background save, so a crash mid-restart cannot reload the stale
-id and reattach to the dying shell (a benign failure — replayed final output +
-`EXIT` — but avoidable).
+id and reattach to the dying shell.)
 
 ### Exit policy (client-side)
 
-Default "close window" closes all tabs (sends `CLOSE` per session). A separate
-**"Exit, detaching all terminals"** path simply disconnects the sockets without
-`CLOSE`, leaving sessions running. This is purely a client/UI decision; the
-daemon supports both kill and detach.
+**v1:** closing the **window / quitting the app detaches** — it simply
+disconnects the sockets without `CLOSE`, leaving every session running so they
+reappear on relaunch (this is what makes the feature demonstrable). Closing a
+single **tab** (the ✕, a shell exit, or the close-tab shortcut) sends
+`CLOSE{SIGHUP, 0}` and kills that one shell. This is purely a client/UI decision;
+the daemon supports both kill and detach.
+
+**v2:** a richer split — an explicit "Quit, killing all terminals" alongside the
+detaching default — once the UI for it exists.
 
 ### Daemon unreachable at launch
 
