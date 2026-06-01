@@ -112,6 +112,8 @@ def _try_parse_progress(body: bytes) -> ProgressEvent | None:
         state = int(parts[2])
     except ValueError:
         return None
+    if state not in (0, 1, 2, 3, 4):
+        return None
     value = 0
     if len(parts) >= 4 and parts[3]:
         try:
