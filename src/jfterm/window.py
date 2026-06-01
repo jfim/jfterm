@@ -507,7 +507,12 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _on_close_tab(self, _sb, tab: Tab) -> None:
         if isinstance(tab, (TerminalTab, LinkedTab)) and tab.is_restarting:
             return
-        group = self.ws._find_group(tab)
+        try:
+            group = self.ws._find_group(tab)
+        except ValueError:
+            # Tab already removed: a user-initiated close can race the
+            # child-exited cleanup for the same tab. Nothing left to do.
+            return
         was_visible = (
             tab.widget is not None and self.terminal_stack.get_visible_child() is tab.widget
         )
