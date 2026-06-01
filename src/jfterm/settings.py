@@ -81,4 +81,6 @@ def load(path: Path) -> AppSettings:
 
 def save(settings: AppSettings, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(asdict(settings), indent=2))
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(asdict(settings), indent=2))
+    tmp.replace(path)
