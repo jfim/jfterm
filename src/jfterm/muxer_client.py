@@ -34,7 +34,12 @@ def _recv_one_frame(sock: socket.socket) -> tuple[int, bytes]:
 
 def hello(sock: socket.socket) -> dict:
     """Send HELLO, return the daemon's HELLO_OK payload. Raises on mismatch."""
-    sock.sendall(mp.encode_json_frame(mp.FrameType.HELLO, {"proto_version": mp.PROTO_VERSION}))
+    sock.sendall(
+        mp.encode_json_frame(
+            mp.FrameType.HELLO,
+            {"proto_version": mp.PROTO_VERSION, "daemon_version": ""},
+        )
+    )
     ftype, value = _recv_one_frame(sock)
     if ftype != mp.FrameType.HELLO_OK:
         raise ConnectionError(f"expected HELLO_OK, got frame type {ftype}")
