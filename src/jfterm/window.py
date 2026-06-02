@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import contextlib
-import os
+import logging
 import shlex
-import signal
 import sys
+import uuid
 from collections.abc import Iterator
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import gi
@@ -42,6 +43,8 @@ from jfterm.terminal import JFTermTerminal  # noqa: E402
 if TYPE_CHECKING:
     from jfterm.mcp_types import ProjectInfo, TabInfo
 
+logger = logging.getLogger(__name__)
+
 
 class JFTermWindow(Adw.ApplicationWindow):
     def __init__(self, application: Adw.Application) -> None:
@@ -50,6 +53,10 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.ws = Workspace()
         load_projects(self.ws, default_path())
         self._project_saver = ProjectSaver(self.ws, default_path())
+
+        from jfterm.muxer_client import MuxerClient
+
+        self._muxer = MuxerClient()
 
         self._settings_path = default_settings_path()
         self._settings: AppSettings = load_settings(self._settings_path)
@@ -75,6 +82,10 @@ class JFTermWindow(Adw.ApplicationWindow):
         self._empty_state = self._build_empty_state()
         self.terminal_stack.add_named(self._empty_state, "__empty__")
         self.terminal_stack.set_visible_child_name("__empty__")
+
+        # Reattach to any shells that outlived a previous window. Needs the
+        # sidebar, terminal_stack, and settings to exist first.
+        self._adopt_live_sessions()
 
         paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         paned.set_start_child(self.sidebar)
@@ -197,6 +208,42 @@ class JFTermWindow(Adw.ApplicationWindow):
 
     def _on_new_tab(self, _sb, group: Group) -> None:
         self._spawn_tab(group)
+
+    def _adopt_live_sessions(self) -> None:
+        try:
+            sessions = self._muxer.list_sessions()
+        except (ConnectionError, OSError) as exc:
+            logger.warning("muxer unavailable at launch: %s", exc)
+            return
+        self._adopt_sessions(sessions)
+
+    def _adopt_sessions(self, sessions: list[dict]) -> None:
+        for info in sessions:
+            self._materialize_adopted_tab(info)
+
+    def _materialize_adopted_tab(self, info: dict) -> TerminalTab:
+        cwd = info.get("cwd") or str(Path.home())
+        argv = info.get("argv") or []
+        terminal = JFTermTerminal(
+            self._muxer,
+            info["session_id"],
+            cwd=cwd,
+            argv=argv,
+            adopt=True,
+            appearance=self._settings,
+        )
+        terminal.set_vexpand(True)
+        terminal.set_hexpand(True)
+        tab = TerminalTab(
+            title=" ".join(argv) or "(recovered)",
+            terminal=terminal,
+            session_id=info["session_id"],
+        )
+        self._wire_terminal(tab, terminal)
+        self.terminal_stack.add_child(terminal)
+        self.ws.unsorted.add_tab(tab)
+        self.sidebar.refresh()
+        return tab
 
     def _spawn_tab(
         self,
