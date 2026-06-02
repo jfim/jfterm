@@ -1,6 +1,7 @@
 import contextlib
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import unquote, urlparse
 
 import gi
@@ -9,15 +10,18 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("Vte", "3.91")
 
-from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Pango, Vte  # noqa: E402
+from gi.repository import Gdk, Gio, GObject, Gtk, Pango, Vte  # noqa: E402
 
 from jfterm.palettes import get as get_palette  # noqa: E402
-from jfterm.pty_proxy import PtyProxy  # noqa: E402
+from jfterm.remote_pty_proxy import RemotePtyProxy  # noqa: E402
 from jfterm.settings import AppSettings  # noqa: E402
+
+if TYPE_CHECKING:
+    from jfterm.muxer_client import MuxerClient
 
 
 class JFTermTerminal(Vte.Terminal):
-    """A VTE terminal driven by an in-process pty proxy.
+    """A VTE terminal driven by a RemotePtyProxy over a jftermd session.
 
     Emits:
       cwd-changed(str)            whenever VTE reports a new OSC 7 cwd
@@ -36,14 +40,18 @@ class JFTermTerminal(Vte.Terminal):
 
     def __init__(
         self,
+        muxer: "MuxerClient",
+        session_id: str,
+        *,
         cwd: str | None = None,
+        argv: list[str] | None = None,
         send_after_spawn: str | None = None,
+        adopt: bool = False,
         appearance: AppSettings | None = None,
     ) -> None:
         super().__init__()
         self._initial_cwd = cwd or str(Path.home())
-        self._osc133_seen = False
-        self._send_after_spawn = send_after_spawn
+        self.session_id = session_id
 
         self.connect("current-directory-uri-changed", self._on_cwd_uri_changed)
         self.connect("window-title-changed", self._on_title_changed)
@@ -51,18 +59,24 @@ class JFTermTerminal(Vte.Terminal):
         self.connect("char-size-changed", self._on_char_size_changed)
 
         shell = os.environ.get("SHELL") or "/bin/bash"
-        self._proxy = PtyProxy(self._initial_cwd, [shell, "-l"])
+        resolved_argv = argv if argv is not None else [shell, "-l"]
+        sock = muxer.connect_session()
+        cols = self.get_column_count() or 80
+        rows = self.get_row_count() or 24
+        self._proxy = RemotePtyProxy(
+            sock,
+            session_id=session_id,
+            cwd=self._initial_cwd,
+            argv=resolved_argv,
+            cols=cols,
+            rows=rows,
+            send_after_open=None if adopt else send_after_spawn,
+        )
         self._proxy.connect("data-ready", self._on_proxy_data)
         self._proxy.connect("progress-changed", self._on_proxy_progress)
         self._proxy.connect("running-changed", self._on_proxy_running_changed)
         self._proxy.connect("child-exited", self._on_proxy_child_exited)
 
-        if self._send_after_spawn is not None:
-            # Shell may not have read its initial prompt yet; pty buffers it.
-            self._proxy.write((self._send_after_spawn + "\n").encode())
-            self._send_after_spawn = None
-
-        self._poll_source: int | None = GLib.timeout_add(250, self._poll_tcgetpgrp)
         self._last_size: tuple[int, int] = (0, 0)
 
         self._install_context_menu()
@@ -189,9 +203,6 @@ class JFTermTerminal(Vte.Terminal):
     def do_dispose(self) -> None:  # type: ignore[override]
         if hasattr(self, "_proxy") and self._proxy is not None:
             self._proxy.close()
-        if self._poll_source is not None:
-            GLib.source_remove(self._poll_source)
-            self._poll_source = None
         Vte.Terminal.do_dispose(self)
 
     # --- proxy callbacks ---
@@ -204,7 +215,6 @@ class JFTermTerminal(Vte.Terminal):
         self.emit("progress-changed", state, value)
 
     def _on_proxy_running_changed(self, _p, running: bool) -> None:
-        self._osc133_seen = True
         self.emit("running-changed", running)
 
     def _on_proxy_child_exited(self, _p, status: int) -> None:
@@ -215,19 +225,3 @@ class JFTermTerminal(Vte.Terminal):
         # if our emit shape doesn't match, it raises TypeError — suppress it.
         with contextlib.suppress(TypeError):
             self.emit("child-exited", status)
-
-    # --- polling fallback ---
-
-    def _poll_tcgetpgrp(self) -> bool:
-        if self._osc133_seen:
-            self._poll_source = None
-            return False
-        if self.pty_fd is None or self.shell_pid is None:
-            return True
-        try:
-            fg = os.tcgetpgrp(self.pty_fd)
-        except OSError:
-            return True
-        running = fg != self.shell_pid
-        self.emit("running-changed", running)
-        return True
