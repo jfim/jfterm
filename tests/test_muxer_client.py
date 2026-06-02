@@ -1,4 +1,3 @@
-import json
 import threading
 from pathlib import Path
 
@@ -73,8 +72,14 @@ def test_hello_roundtrip(tmp_path):
 def test_list_sessions_returns_session_dicts(tmp_path):
     sock_path = tmp_path / "m.sock"
     sessions = [
-        {"session_id": "a", "argv": ["bash"], "cwd": "/tmp", "running": True,
-         "has_client": False, "created_at": 1.0}
+        {
+            "session_id": "a",
+            "argv": ["bash"],
+            "cwd": "/tmp",
+            "running": True,
+            "has_client": False,
+            "created_at": 1.0,
+        }
     ]
 
     def responder(conn, ftype, value):
