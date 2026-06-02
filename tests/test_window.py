@@ -118,6 +118,7 @@ def test_adopt_session_appends_terminal_tab_to_unsorted():
     fake_self = SimpleNamespace(
         ws=ws,
         _materialize_adopted_tab=fake_materialize,
+        _select_tab=lambda t: None,
     )
     sessions = [
         {"session_id": "s1", "argv": ["bash"], "cwd": "/tmp"},
@@ -125,6 +126,42 @@ def test_adopt_session_appends_terminal_tab_to_unsorted():
     ]
     JFTermWindow._adopt_sessions(fake_self, sessions)  # pyright: ignore[reportArgumentType]
     assert [t.session_id for t in ws.unsorted.tabs] == ["s1", "s2"]  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def test_adopt_sessions_selects_first_adopted_tab():
+    # When sessions are adopted at startup, the first one should be shown
+    # instead of leaving the empty-state ("create a new tab") UI visible.
+    ws = Workspace()
+    selected: list = []
+
+    def fake_materialize(info):
+        tab = SimpleNamespace(session_id=info["session_id"], widget=object())
+        ws.unsorted.tabs.append(tab)  # pyright: ignore[reportArgumentType]
+        return tab
+
+    fake_self = SimpleNamespace(
+        ws=ws,
+        _materialize_adopted_tab=fake_materialize,
+        _select_tab=lambda t: selected.append(t),
+    )
+    sessions = [
+        {"session_id": "s1", "argv": ["bash"], "cwd": "/tmp"},
+        {"session_id": "s2", "argv": ["vim"], "cwd": "/home"},
+    ]
+    JFTermWindow._adopt_sessions(fake_self, sessions)  # pyright: ignore[reportArgumentType]
+    assert [t.session_id for t in selected] == ["s1"]
+
+
+def test_adopt_sessions_selects_nothing_when_empty():
+    ws = Workspace()
+    selected: list = []
+    fake_self = SimpleNamespace(
+        ws=ws,
+        _materialize_adopted_tab=lambda info: None,
+        _select_tab=lambda t: selected.append(t),
+    )
+    JFTermWindow._adopt_sessions(fake_self, [])  # pyright: ignore[reportArgumentType]
+    assert selected == []
 
 
 def test_spawn_tab_returns_none_when_muxer_unreachable(monkeypatch):
