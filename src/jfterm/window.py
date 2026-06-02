@@ -201,10 +201,14 @@ class JFTermWindow(Adw.ApplicationWindow):
 
     def _on_tab_activated(self, _sb, tab: Tab) -> None:
         if tab.widget is not None:
-            self._current_group = self.ws._find_group(tab)
-            self.terminal_stack.set_visible_child(tab.widget)
-            self.sidebar.set_active_tab(tab)
-            tab.widget.grab_focus()
+            self._select_tab(tab)
+
+    def _select_tab(self, tab: Tab) -> None:
+        """Make `tab` the visible/active tab in its group and focus it."""
+        self._current_group = self.ws._find_group(tab)
+        self.terminal_stack.set_visible_child(tab.widget)
+        self.sidebar.set_active_tab(tab)
+        tab.widget.grab_focus()
 
     def _on_new_tab(self, _sb, group: Group) -> None:
         self._spawn_tab(group)
@@ -218,11 +222,18 @@ class JFTermWindow(Adw.ApplicationWindow):
         self._adopt_sessions(sessions)
 
     def _adopt_sessions(self, sessions: list[dict]) -> None:
+        first: TerminalTab | None = None
         for info in sessions:
             try:
-                self._materialize_adopted_tab(info)
+                tab = self._materialize_adopted_tab(info)
             except (ConnectionError, OSError) as exc:
                 logger.warning("failed to adopt session %s: %s", info.get("session_id"), exc)
+                continue
+            if first is None:
+                first = tab
+        # Show the first adopted session instead of the empty-state UI.
+        if first is not None:
+            self._select_tab(first)
 
     def _materialize_adopted_tab(self, info: dict) -> TerminalTab:
         cwd = info.get("cwd") or str(Path.home())
