@@ -2,10 +2,10 @@ import gi
 
 gi.require_version("Vte", "3.91")
 from gi.repository import GLib  # noqa: E402
+from tests.fake_muxer import FakeMuxer  # noqa: E402
 
 from jfterm import muxer_proto as mp  # noqa: E402
 from jfterm.remote_pty_proxy import RemotePtyProxy  # noqa: E402
-from tests.fake_muxer import FakeMuxer  # noqa: E402
 
 
 def test_binds_with_attach_or_open_on_construction():
