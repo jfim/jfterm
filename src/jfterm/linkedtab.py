@@ -33,7 +33,7 @@ class JFTermLinkedView(Gtk.Paned):
 
     def __init__(
         self,
-        muxer: "MuxerClient",
+        muxer: MuxerClient,
         session_id: str,
         *,
         cwd: str | None,
