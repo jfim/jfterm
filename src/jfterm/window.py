@@ -1346,6 +1346,14 @@ class JFTermWindow(Adw.ApplicationWindow):
             GLib.source_remove(self._window_save_source)
             self._window_save_source = None
         self._persist_window_geometry()
+        # Detach (do NOT close) every session so shells outlive the window.
+        # GTK dispose later calls _proxy.close(), which no-ops once detached.
+        for group in self.ws.all_groups():
+            for tab in group.tabs:
+                terminal = getattr(tab, "terminal", None)
+                if terminal is not None and terminal._proxy is not None:
+                    terminal._proxy.detach()
+        self._muxer.close()
         # Block briefly so any queued project-save lands before we exit.
         self._project_saver.flush(timeout=5.0)
         return False  # allow close
