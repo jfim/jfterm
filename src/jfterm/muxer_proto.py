@@ -29,3 +29,13 @@ class FrameType(enum.IntEnum):
     DATA = 9
     STATUS = 10
     EXIT = 11
+
+
+def encode_frame(ftype: int, value: bytes) -> bytes:
+    """One TLV frame: header + raw value bytes."""
+    return _HEADER.pack(int(ftype), len(value)) + value
+
+
+def encode_json_frame(ftype: int, obj: object) -> bytes:
+    """A control frame whose value is a compact UTF-8 JSON object."""
+    return encode_frame(ftype, json.dumps(obj).encode("utf-8"))
