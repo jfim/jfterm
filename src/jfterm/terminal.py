@@ -63,15 +63,19 @@ class JFTermTerminal(Vte.Terminal):
         sock = muxer.connect_session()
         cols = self.get_column_count() or 80
         rows = self.get_row_count() or 24
-        self._proxy = RemotePtyProxy(
-            sock,
-            session_id=session_id,
-            cwd=self._initial_cwd,
-            argv=resolved_argv,
-            cols=cols,
-            rows=rows,
-            send_after_open=None if adopt else send_after_spawn,
-        )
+        try:
+            self._proxy = RemotePtyProxy(
+                sock,
+                session_id=session_id,
+                cwd=self._initial_cwd,
+                argv=resolved_argv,
+                cols=cols,
+                rows=rows,
+                send_after_open=None if adopt else send_after_spawn,
+            )
+        except Exception:
+            sock.close()
+            raise
         self._proxy.connect("data-ready", self._on_proxy_data)
         self._proxy.connect("progress-changed", self._on_proxy_progress)
         self._proxy.connect("running-changed", self._on_proxy_running_changed)
