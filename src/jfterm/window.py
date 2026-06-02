@@ -254,19 +254,23 @@ class JFTermWindow(Adw.ApplicationWindow):
         *,
         command: str | None = None,
         focus: bool = True,
-    ) -> TerminalTab:
+    ) -> TerminalTab | None:
         cwd = group.directory if isinstance(group, Project) else None
         tab = TerminalTab(
             title=command or "(starting…)",
             launched_command=command,
         )
-        terminal = JFTermTerminal(
-            self._muxer,
-            tab.session_id,
-            cwd=cwd,
-            send_after_spawn=command,
-            appearance=self._settings,
-        )
+        try:
+            terminal = JFTermTerminal(
+                self._muxer,
+                tab.session_id,
+                cwd=cwd,
+                send_after_spawn=command,
+                appearance=self._settings,
+            )
+        except (ConnectionError, OSError) as exc:
+            logger.warning("could not spawn terminal (muxer unavailable): %s", exc)
+            return None
         terminal.set_vexpand(True)
         terminal.set_hexpand(True)
         tab.terminal = terminal
@@ -376,7 +380,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         from_startup: bool = False,
         linked_source: str | None = None,
         focus: bool = True,
-    ) -> LinkedTab:
+    ) -> LinkedTab | None:
         from jfterm.linkedtab import JFTermLinkedView, is_available
         from jfterm.models import LinkedTab
 
@@ -389,6 +393,8 @@ class JFTermWindow(Adw.ApplicationWindow):
                 command=f'echo "JFTerm: linked: needs {WEBKIT_PACKAGE}"',
                 focus=focus,
             )
+            if fb is None:
+                return None
             if flash_name is not None:
                 fb.flash_name = flash_name
                 fb.title = f"⚡ {flash_name}"
@@ -426,14 +432,18 @@ class JFTermWindow(Adw.ApplicationWindow):
             linked_auto=spec.url is None,
             linked_source=linked_source,
         )
-        view = JFTermLinkedView(
-            self._muxer,
-            tab.session_id,
-            cwd=cwd,
-            send_after_spawn=send,
-            appearance=self._settings,
-            initial_url=spec.url,  # None means auto-detect
-        )
+        try:
+            view = JFTermLinkedView(
+                self._muxer,
+                tab.session_id,
+                cwd=cwd,
+                send_after_spawn=send,
+                appearance=self._settings,
+                initial_url=spec.url,  # None means auto-detect
+            )
+        except (ConnectionError, OSError) as exc:
+            logger.warning("could not spawn linked tab (muxer unavailable): %s", exc)
+            return None
         tab.terminal = view.terminal
         tab.web_view = view.web_view
         tab.paned = view
@@ -632,13 +642,21 @@ class JFTermWindow(Adw.ApplicationWindow):
             self.terminal_stack.remove(old_terminal)
 
         tab.session_id = uuid.uuid4().hex
-        new_terminal = JFTermTerminal(
-            self._muxer,
-            tab.session_id,
-            cwd=cwd,
-            send_after_spawn=command,
-            appearance=self._settings,
-        )
+        try:
+            new_terminal = JFTermTerminal(
+                self._muxer,
+                tab.session_id,
+                cwd=cwd,
+                send_after_spawn=command,
+                appearance=self._settings,
+            )
+        except (ConnectionError, OSError) as exc:
+            # The old terminal is already gone, so the tab can't be revived.
+            # Clear the restart guard and close the now-defunct tab cleanly.
+            logger.warning("could not restart terminal (muxer unavailable): %s", exc)
+            tab.is_restarting = False
+            self._on_close_tab(self.sidebar, tab)
+            return
         new_terminal.set_vexpand(True)
         new_terminal.set_hexpand(True)
 
@@ -694,13 +712,21 @@ class JFTermWindow(Adw.ApplicationWindow):
             old_terminal._proxy.close(grace_ms=1500)
 
         tab.session_id = uuid.uuid4().hex
-        new_terminal = JFTermTerminal(
-            self._muxer,
-            tab.session_id,
-            cwd=cwd,
-            send_after_spawn=send,
-            appearance=self._settings,
-        )
+        try:
+            new_terminal = JFTermTerminal(
+                self._muxer,
+                tab.session_id,
+                cwd=cwd,
+                send_after_spawn=send,
+                appearance=self._settings,
+            )
+        except (ConnectionError, OSError) as exc:
+            # The old terminal is already gone, so the tab can't be revived.
+            # Clear the restart guard and close the now-defunct tab cleanly.
+            logger.warning("could not restart linked terminal (muxer unavailable): %s", exc)
+            tab.is_restarting = False
+            self._on_close_tab(self.sidebar, tab)
+            return
         new_terminal.set_vexpand(True)
         new_terminal.set_hexpand(True)
 
@@ -929,8 +955,9 @@ class JFTermWindow(Adw.ApplicationWindow):
                         command=f'echo "JFTerm: {e}"',
                         focus=focus,
                     )
-                    fb.from_startup = True
-                    fb.title = f"▶ {sc.command}"
+                    if fb is not None:
+                        fb.from_startup = True
+                        fb.title = f"▶ {sc.command}"
             elif is_web_url(sc.command):
                 try:
                     self._spawn_web_tab(
@@ -945,12 +972,14 @@ class JFTermWindow(Adw.ApplicationWindow):
                         command=f'echo "JFTerm: {e}"',
                         focus=focus,
                     )
-                    fb.from_startup = True
-                    fb.title = f"▶ {sc.command}"
+                    if fb is not None:
+                        fb.from_startup = True
+                        fb.title = f"▶ {sc.command}"
             else:
                 tab = self._spawn_tab(project, command=sc.command, focus=focus)
-                tab.from_startup = True
-                tab.title = f"▶ {sc.command}"
+                if tab is not None:
+                    tab.from_startup = True
+                    tab.title = f"▶ {sc.command}"
             if idx + 1 < len(cmds) or spawn_blank:
                 if sc.delay > 0:
                     GLib.timeout_add_seconds(sc.delay, _step, idx + 1)
@@ -994,16 +1023,18 @@ class JFTermWindow(Adw.ApplicationWindow):
                     command=f'echo "JFTerm: {e}"',
                     focus=fc.focus_on_launch,
                 )
-                fb.flash_name = fc.name
-                fb.title = f"⚡ {fc.name}"
+                if fb is not None:
+                    fb.flash_name = fc.name
+                    fb.title = f"⚡ {fc.name}"
             self.sidebar.refresh()
             return
 
         wrapped = wrap_flash_command(fc)
         tab = self._spawn_tab(project, command=wrapped, focus=fc.focus_on_launch)
-        tab.flash_name = fc.name
-        tab.flash_original_command = fc.command
-        tab.title = f"⚡ {fc.name}"
+        if tab is not None:
+            tab.flash_name = fc.name
+            tab.flash_original_command = fc.command
+            tab.title = f"⚡ {fc.name}"
         self.sidebar.refresh()
 
     def _on_toggle_expanded(self, _sb, group: Group) -> None:
@@ -1147,7 +1178,12 @@ class JFTermWindow(Adw.ApplicationWindow):
         )
 
     def mcp_spawn_tab(self, project_name: str, command: str) -> TabInfo:
-        from jfterm.mcp_types import ControlCharInCommand, EmptyCommand, ProjectNotFound
+        from jfterm.mcp_types import (
+            ControlCharInCommand,
+            EmptyCommand,
+            MuxerUnavailable,
+            ProjectNotFound,
+        )
 
         if not command:
             raise EmptyCommand()
@@ -1157,6 +1193,8 @@ class JFTermWindow(Adw.ApplicationWindow):
         if group is None:
             raise ProjectNotFound(project_name)
         tab = self._spawn_tab(group, command=command, focus=False)
+        if tab is None:
+            raise MuxerUnavailable("the multiplexer daemon is unreachable")
         return self._tab_to_info(tab, group.name)
 
     def mcp_spawn_web_tab(self, project_name: str, url: str) -> TabInfo:

@@ -57,6 +57,10 @@ class EmptyUrl(MCPError):
     pass
 
 
+class MuxerUnavailable(MCPError):
+    """The multiplexer daemon could not be reached to spawn a shell."""
+
+
 class MCPController(Protocol):
     def list_projects(self) -> list[ProjectInfo]: ...
     def list_tabs(self, project_name: str | None) -> list[TabInfo]: ...
