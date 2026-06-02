@@ -127,6 +127,87 @@ def test_adopt_session_appends_terminal_tab_to_unsorted():
     assert [t.session_id for t in ws.unsorted.tabs] == ["s1", "s2"]  # pyright: ignore[reportAttributeAccessIssue]
 
 
+def test_spawn_tab_returns_none_when_muxer_unreachable(monkeypatch):
+    """_spawn_tab must degrade gracefully when JFTermTerminal construction
+    fails because the muxer daemon can't be reached: no exception escapes,
+    no half-added tab lands in the group, and the method returns None."""
+    from jfterm import window as window_mod
+
+    def _boom(*_a, **_k):
+        raise ConnectionError("daemon unreachable")
+
+    # Replace the terminal class the method references so construction
+    # raises exactly the way it would when connect_session() fails.
+    monkeypatch.setattr(window_mod, "JFTermTerminal", _boom)
+
+    ws = Workspace()
+    p = ws.add_project(name="A", directory="/tmp/a")
+
+    refreshes: list[int] = []
+    added: list = []
+    fake_self = SimpleNamespace(
+        ws=ws,
+        _muxer=object(),
+        _settings=object(),
+        terminal_stack=SimpleNamespace(add_child=lambda w: added.append(w)),
+        sidebar=SimpleNamespace(refresh=lambda: refreshes.append(1), set_active_tab=lambda t: None),
+        _wire_terminal=lambda tab, terminal: None,
+        _current_group=None,
+    )
+
+    result = JFTermWindow._spawn_tab(fake_self, p, command="echo hi")  # pyright: ignore[reportArgumentType]
+
+    assert result is None, "should return None on muxer-unreachable"
+    assert p.tabs == [], "no tab should be added to the group"
+    assert added == [], "nothing should be mounted in the stack"
+
+
+def test_restart_tab_closes_tab_when_muxer_unreachable(monkeypatch):
+    """_on_restart_tab tears down the old terminal before building the new
+    one, so a muxer-unreachable failure during the rebuild can't revive the
+    tab. It must clear is_restarting and close the now-defunct tab cleanly."""
+    from jfterm import window as window_mod
+
+    def _boom(*_a, **_k):
+        raise ConnectionError("daemon unreachable")
+
+    monkeypatch.setattr(window_mod, "JFTermTerminal", _boom)
+
+    ws = Workspace()
+    p = ws.add_project(name="A", directory="/tmp/a")
+
+    class FakeProxy:
+        def close(self, grace_ms=0):
+            pass
+
+    class FakeTerm:
+        def __init__(self):
+            self._proxy = FakeProxy()
+
+    old_term = FakeTerm()
+    tab = TerminalTab(title="srv", launched_command="run-server")
+    tab.terminal = old_term  # pyright: ignore[reportAttributeAccessIssue]
+    p.add_tab(tab)
+
+    closed: list = []
+    fake_self = SimpleNamespace(
+        ws=ws,
+        _muxer=object(),
+        _settings=object(),
+        terminal_stack=SimpleNamespace(
+            get_visible_child=lambda: None,
+            remove=lambda w: None,
+        ),
+        sidebar=object(),
+        _on_close_tab=lambda sb, t: closed.append(t),
+    )
+
+    JFTermWindow._on_restart_tab(fake_self, None, tab)  # pyright: ignore[reportArgumentType]
+
+    assert tab.is_restarting is False, "is_restarting must be cleared"
+    assert closed == [tab], "the defunct tab should be closed via the close path"
+
+
 def test_close_request_detaches_all_sessions():
     ws = Workspace()
     p = ws.add_project(name="A", directory="/tmp/a")
