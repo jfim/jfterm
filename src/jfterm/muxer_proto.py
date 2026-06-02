@@ -71,7 +71,7 @@ class FrameDecoder:
             end = _HEADER.size + length
             if len(self._buf) < end:
                 break
-            value = bytes(self._buf[_HEADER.size:end])
+            value = bytes(self._buf[_HEADER.size : end])
             del self._buf[:end]
             out.append((ftype, value))
         return out

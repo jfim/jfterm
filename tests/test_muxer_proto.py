@@ -37,9 +37,7 @@ def test_encode_json_frame_roundtrips_shape():
 
 def test_decoder_yields_complete_frames():
     dec = mp.FrameDecoder()
-    buf = mp.encode_frame(mp.FrameType.DATA, b"abc") + mp.encode_frame(
-        mp.FrameType.EXIT, b"{}"
-    )
+    buf = mp.encode_frame(mp.FrameType.DATA, b"abc") + mp.encode_frame(mp.FrameType.EXIT, b"{}")
     frames = dec.feed(buf)
     assert frames == [(mp.FrameType.DATA, b"abc"), (mp.FrameType.EXIT, b"{}")]
 
@@ -62,8 +60,6 @@ def test_decoder_handles_split_inside_header():
 def test_decoder_rejects_oversize_frame():
     dec = mp.FrameDecoder()
     # Header declaring a length above the 16 MiB cap is a protocol violation.
-    oversize_header = mp.struct.Struct(">BI").pack(
-        mp.FrameType.DATA, mp.MAX_FRAME_LEN + 1
-    )
+    oversize_header = mp.struct.Struct(">BI").pack(mp.FrameType.DATA, mp.MAX_FRAME_LEN + 1)
     with pytest.raises(mp.ProtocolError):
         dec.feed(oversize_header)
