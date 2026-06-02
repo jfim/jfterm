@@ -610,7 +610,6 @@ class JFTermWindow(Adw.ApplicationWindow):
         if isinstance(tab, LinkedTab):
             self._restart_linked_tab(tab)
             return
-        from gi.repository import GLib
 
         group = self.ws._find_group(tab)
         cwd = group.directory if isinstance(group, Project) else None
@@ -618,40 +617,29 @@ class JFTermWindow(Adw.ApplicationWindow):
         was_visible = (
             tab.terminal is not None and self.terminal_stack.get_visible_child() is tab.terminal
         )
-        old_terminal = tab.terminal
-        old_pid = old_terminal.shell_pid if old_terminal is not None else None
 
         # Block the old terminal's child-exited from closing the tab.
         tab.is_restarting = True
 
-        # SIGTERM now; SIGKILL after grace period if still alive.
-        if old_pid is not None:
-            with contextlib.suppress(ProcessLookupError):
-                os.kill(old_pid, signal.SIGTERM)
-
-            def _force_kill(pid: int = old_pid) -> bool:
-                try:
-                    os.kill(pid, 0)
-                except ProcessLookupError:
-                    return False
-                with contextlib.suppress(ProcessLookupError):
-                    os.kill(pid, signal.SIGKILL)
-                return False
-
-            GLib.timeout_add(1500, _force_kill)
-
-        # Swap in a fresh terminal for the same tab.
+        # Swap in a fresh terminal for the same tab. The daemon owns the
+        # SIGHUP -> grace -> SIGKILL escalation; the client only asks.
+        old_terminal = tab.terminal
         if old_terminal is not None:
-            old_terminal._proxy.close()  # break GLib closure ref before GTK dispose
+            old_terminal._proxy.close(grace_ms=1500)
             self.terminal_stack.remove(old_terminal)
 
-        new_terminal = JFTermTerminal(cwd=cwd, send_after_spawn=command, appearance=self._settings)
+        tab.session_id = uuid.uuid4().hex
+        new_terminal = JFTermTerminal(
+            self._muxer,
+            tab.session_id,
+            cwd=cwd,
+            send_after_spawn=command,
+            appearance=self._settings,
+        )
         new_terminal.set_vexpand(True)
         new_terminal.set_hexpand(True)
 
         tab.terminal = new_terminal
-        tab.shell_pid = None
-        tab.pty_fd = None
         tab.is_running = False
         tab.osc133_seen = False
         tab.title = f"▶ {command}" if tab.from_startup else command
@@ -674,8 +662,6 @@ class JFTermWindow(Adw.ApplicationWindow):
         The webview is preserved. In auto mode `linked_url` is reset so
         the first URL printed by the new process reloads the webview;
         in explicit-URL mode the webview is left untouched."""
-        from gi.repository import GLib
-
         from jfterm.terminal import JFTermTerminal
 
         view = tab.paned
@@ -694,32 +680,24 @@ class JFTermWindow(Adw.ApplicationWindow):
         else:
             send = command
 
-        old_terminal = tab.terminal
-        old_pid = old_terminal.shell_pid if old_terminal is not None else None
-
         # Block the old terminal's child-exited from collapsing the
         # webview or closing the tab while the swap is in flight.
         tab.is_restarting = True
 
-        if old_pid is not None:
-            with contextlib.suppress(ProcessLookupError):
-                os.kill(old_pid, signal.SIGTERM)
-
-            def _force_kill(pid: int = old_pid) -> bool:
-                try:
-                    os.kill(pid, 0)
-                except ProcessLookupError:
-                    return False
-                with contextlib.suppress(ProcessLookupError):
-                    os.kill(pid, signal.SIGKILL)
-                return False
-
-            GLib.timeout_add(1500, _force_kill)
-
+        # The daemon owns the SIGHUP -> grace -> SIGKILL escalation; the
+        # client only asks.
+        old_terminal = tab.terminal
         if old_terminal is not None:
-            old_terminal._proxy.close()  # break GLib closure ref before GTK dispose
+            old_terminal._proxy.close(grace_ms=1500)
 
-        new_terminal = JFTermTerminal(cwd=cwd, send_after_spawn=send, appearance=self._settings)
+        tab.session_id = uuid.uuid4().hex
+        new_terminal = JFTermTerminal(
+            self._muxer,
+            tab.session_id,
+            cwd=cwd,
+            send_after_spawn=send,
+            appearance=self._settings,
+        )
         new_terminal.set_vexpand(True)
         new_terminal.set_hexpand(True)
 
@@ -729,8 +707,6 @@ class JFTermWindow(Adw.ApplicationWindow):
         view.terminal = new_terminal
 
         tab.terminal = new_terminal
-        tab.shell_pid = None
-        tab.pty_fd = None
         tab.is_running = False
         tab.osc133_seen = False
         # In auto mode, re-arm the URL scanner so the first URL the new
