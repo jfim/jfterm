@@ -253,14 +253,20 @@ class JFTermWindow(Adw.ApplicationWindow):
         focus: bool = True,
     ) -> TerminalTab:
         cwd = group.directory if isinstance(group, Project) else None
-        terminal = JFTermTerminal(cwd=cwd, send_after_spawn=command, appearance=self._settings)
-        terminal.set_vexpand(True)
-        terminal.set_hexpand(True)
         tab = TerminalTab(
             title=command or "(starting…)",
-            terminal=terminal,
             launched_command=command,
         )
+        terminal = JFTermTerminal(
+            self._muxer,
+            tab.session_id,
+            cwd=cwd,
+            send_after_spawn=command,
+            appearance=self._settings,
+        )
+        terminal.set_vexpand(True)
+        terminal.set_hexpand(True)
+        tab.terminal = terminal
         self._wire_terminal(tab, terminal)
         self.terminal_stack.add_child(terminal)
         group.add_tab(tab)
@@ -398,12 +404,6 @@ class JFTermWindow(Adw.ApplicationWindow):
             )
         else:
             send = spec.command
-        view = JFTermLinkedView(
-            cwd=cwd,
-            send_after_spawn=send,
-            appearance=self._settings,
-            initial_url=spec.url,  # None means auto-detect
-        )
 
         if flash_name is not None:
             initial_title = f"⚡ {flash_name}"
@@ -412,11 +412,9 @@ class JFTermWindow(Adw.ApplicationWindow):
         else:
             initial_title = spec.command
 
+        # Create the tab first so its session_id can bind the muxer session.
         tab = LinkedTab(
             title=initial_title,
-            terminal=view.terminal,
-            web_view=view.web_view,
-            paned=view,
             launched_command=spec.command,
             flash_name=flash_name,
             from_startup=from_startup,
@@ -425,6 +423,17 @@ class JFTermWindow(Adw.ApplicationWindow):
             linked_auto=spec.url is None,
             linked_source=linked_source,
         )
+        view = JFTermLinkedView(
+            self._muxer,
+            tab.session_id,
+            cwd=cwd,
+            send_after_spawn=send,
+            appearance=self._settings,
+            initial_url=spec.url,  # None means auto-detect
+        )
+        tab.terminal = view.terminal
+        tab.web_view = view.web_view
+        tab.paned = view
 
         self._wire_linked_terminal(tab, view, view.terminal)
 

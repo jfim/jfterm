@@ -9,12 +9,15 @@ are both required.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from gi.repository import Gtk
 
 from jfterm.terminal import JFTermTerminal
 from jfterm.webtab import JFTermWebView, is_available  # re-export
+
+if TYPE_CHECKING:
+    from jfterm.muxer_client import MuxerClient
 
 # Width (in pixels) the webview pane shrinks to when the process exits
 # non-zero. Small enough to be effectively hidden, large enough that the
@@ -30,6 +33,8 @@ class JFTermLinkedView(Gtk.Paned):
 
     def __init__(
         self,
+        muxer: "MuxerClient",
+        session_id: str,
         *,
         cwd: str | None,
         send_after_spawn: str | None,
@@ -45,6 +50,8 @@ class JFTermLinkedView(Gtk.Paned):
         self.web_view.set_hexpand(True)
 
         self.terminal = JFTermTerminal(
+            muxer,
+            session_id,
             cwd=cwd,
             send_after_spawn=send_after_spawn,
             appearance=appearance,
