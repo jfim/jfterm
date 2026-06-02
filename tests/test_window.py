@@ -103,3 +103,25 @@ def test_dispatch_launcher_action_routes_to_existing_handlers():
         ("startup", p),
         ("jump", tab),
     ]
+
+
+def test_adopt_session_appends_terminal_tab_to_unsorted():
+    ws = Workspace()
+    created = []
+
+    def fake_materialize(info):
+        tab = SimpleNamespace(session_id=info["session_id"], title=info.get("argv", ["?"])[0])
+        ws.unsorted.tabs.append(tab)
+        created.append(tab)
+        return tab
+
+    fake_self = SimpleNamespace(
+        ws=ws,
+        _materialize_adopted_tab=fake_materialize,
+    )
+    sessions = [
+        {"session_id": "s1", "argv": ["bash"], "cwd": "/tmp"},
+        {"session_id": "s2", "argv": ["vim"], "cwd": "/home"},
+    ]
+    JFTermWindow._adopt_sessions(fake_self, sessions)  # pyright: ignore[reportArgumentType]
+    assert [t.session_id for t in ws.unsorted.tabs] == ["s1", "s2"]
