@@ -164,6 +164,55 @@ def test_adopt_sessions_selects_nothing_when_empty():
     assert selected == []
 
 
+def test_adopt_live_sessions_banners_when_jftermd_missing():
+    from jfterm.window import MUXER_MISSING_BANNER
+
+    shown: list = []
+    adopted: list = []
+
+    def raise_missing():
+        raise FileNotFoundError(2, "No such file or directory", "jftermd")
+
+    fake_self = SimpleNamespace(
+        _muxer=SimpleNamespace(list_sessions=raise_missing),
+        _show_muxer_banner=lambda m: shown.append(m),
+        _adopt_sessions=lambda s: adopted.append(s),
+    )
+    JFTermWindow._adopt_live_sessions(fake_self)  # pyright: ignore[reportArgumentType]
+    assert shown == [MUXER_MISSING_BANNER]
+    assert adopted == []
+
+
+def test_adopt_live_sessions_banners_on_start_failure():
+    from jfterm.window import MUXER_FAILED_BANNER
+
+    shown: list = []
+
+    def raise_conn():
+        raise ConnectionError("could not connect to or spawn jftermd")
+
+    fake_self = SimpleNamespace(
+        _muxer=SimpleNamespace(list_sessions=raise_conn),
+        _show_muxer_banner=lambda m: shown.append(m),
+        _adopt_sessions=lambda s: None,
+    )
+    JFTermWindow._adopt_live_sessions(fake_self)  # pyright: ignore[reportArgumentType]
+    assert shown == [MUXER_FAILED_BANNER]
+
+
+def test_adopt_live_sessions_no_banner_on_success():
+    shown: list = []
+    adopted: list = []
+    fake_self = SimpleNamespace(
+        _muxer=SimpleNamespace(list_sessions=lambda: [{"session_id": "s1"}]),
+        _show_muxer_banner=lambda m: shown.append(m),
+        _adopt_sessions=lambda s: adopted.append(s),
+    )
+    JFTermWindow._adopt_live_sessions(fake_self)  # pyright: ignore[reportArgumentType]
+    assert shown == []
+    assert adopted == [[{"session_id": "s1"}]]
+
+
 def test_spawn_tab_returns_none_when_muxer_unreachable(monkeypatch):
     """_spawn_tab must degrade gracefully when JFTermTerminal construction
     fails because the muxer daemon can't be reached: no exception escapes,

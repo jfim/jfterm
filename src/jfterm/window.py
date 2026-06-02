@@ -45,6 +45,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Shown in a banner when the muxer daemon can't be reached at startup.
+MUXER_MISSING_BANNER = "jftermd (terminal backend) not found — run “just install” to set it up."
+MUXER_FAILED_BANNER = "jftermd (terminal backend) failed to start."
+
 
 class JFTermWindow(Adw.ApplicationWindow):
     def __init__(self, application: Adw.Application) -> None:
@@ -82,6 +86,12 @@ class JFTermWindow(Adw.ApplicationWindow):
         self._empty_state = self._build_empty_state()
         self.terminal_stack.add_named(self._empty_state, "__empty__")
         self.terminal_stack.set_visible_child_name("__empty__")
+
+        # Banner surfaced when the muxer daemon is unavailable (added to the
+        # toolbar below the header further down). Created before adoption so
+        # _adopt_live_sessions can reveal it.
+        self._muxer_banner = Adw.Banner()
+        self._muxer_banner.set_revealed(False)
 
         # Reattach to any shells that outlived a previous window. Needs the
         # sidebar, terminal_stack, and settings to exist first.
@@ -127,6 +137,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         self.add_action(new_project_action)
 
         toolbar.add_top_bar(header)
+        toolbar.add_top_bar(self._muxer_banner)
         toolbar.set_content(paned)
         self.set_content(toolbar)
 
@@ -216,10 +227,21 @@ class JFTermWindow(Adw.ApplicationWindow):
     def _adopt_live_sessions(self) -> None:
         try:
             sessions = self._muxer.list_sessions()
+        except FileNotFoundError as exc:
+            # `jftermd` is not on PATH (spawn failed) — it isn't installed.
+            logger.warning("jftermd not found at launch: %s", exc)
+            self._show_muxer_banner(MUXER_MISSING_BANNER)
+            return
         except (ConnectionError, OSError) as exc:
+            # The binary exists but the daemon could not be reached/started.
             logger.warning("muxer unavailable at launch: %s", exc)
+            self._show_muxer_banner(MUXER_FAILED_BANNER)
             return
         self._adopt_sessions(sessions)
+
+    def _show_muxer_banner(self, message: str) -> None:
+        self._muxer_banner.set_title(message)
+        self._muxer_banner.set_revealed(True)
 
     def _adopt_sessions(self, sessions: list[dict]) -> None:
         first: TerminalTab | None = None
