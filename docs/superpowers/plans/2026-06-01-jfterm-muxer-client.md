@@ -10,7 +10,7 @@
 
 **Dependency note:** jftermd does not exist yet. Every protocol/transport unit is built and tested against a **fake daemon** (the peer end of a `socket.socketpair()`), so Phases 1–7 are fully implementable and testable now. Steps that require the real daemon (self-spawn round-trip, manual acceptance) are explicitly marked **[GATED: real jftermd]** and are the only ones that cannot be verified until the Rust binary lands.
 
-**Protocol is the contract:** `muxer_proto.py` (frame types, `PROTO_VERSION`, JSON shapes) is the single place that mirrors the muxer repo's `PROTOCOL.md`. If the real daemon diverges, fix it here and in the fake.
+**Protocol is the contract:** `muxer_proto.py` (frame types, `PROTO_VERSION`, JSON shapes) is the single place that mirrors the muxer repo's authoritative `~/projects/jfterm-muxer/docs/PROTOCOL-v1.md`. This plan is written against that document. If the real daemon diverges, fix it here and in the fake.
 
 ---
 
@@ -28,7 +28,7 @@
 **Modify:**
 - `src/jfterm/models.py` — add `session_id` runtime field to `TerminalTab` and `LinkedTab`.
 - `src/jfterm/terminal.py` — `JFTermTerminal` takes `session_id` + a `MuxerClient`, uses `RemotePtyProxy`, drops the `tcgetpgrp` poll.
-- `src/jfterm/window.py` — create `MuxerClient`, adopt sessions into Unsorted on launch, rewire restart to `CLOSE{SIGTERM,1500}` + new `session_id`, detach all sessions on window close.
+- `src/jfterm/window.py` — create `MuxerClient`, adopt sessions into Unsorted on launch, rewire restart to `CLOSE{grace_ms:1500}` + new `session_id`, detach all sessions on window close.
 
 **Delete (Phase 7 cleanup):**
 - `src/jfterm/pty_proxy.py`, `src/jfterm/osc_scanner.py`, `tests/test_osc_scanner.py`.
@@ -76,7 +76,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'jfterm.muxer_proto'`
 # src/jfterm/muxer_proto.py
 """TLV wire protocol shared between JFTerm (client) and jftermd (daemon).
 
-This module is the canonical Python mirror of the muxer repo's PROTOCOL.md.
+This module is the canonical Python mirror of the muxer repo's PROTOCOL-v1.md.
 Frame: [u8 type][u32 length big-endian][value … length bytes].
 Hot-path frames (DATA, INPUT) carry raw terminal bytes; control frames carry
 a JSON object encoded as UTF-8 bytes.
@@ -210,7 +210,19 @@ def test_decoder_handles_split_inside_header():
     full = mp.encode_frame(mp.FrameType.INPUT, b"x")
     assert dec.feed(full[:2]) == []  # header is 5 bytes
     assert dec.feed(full[2:]) == [(mp.FrameType.INPUT, b"x")]
+
+
+def test_decoder_rejects_oversize_frame():
+    dec = mp.FrameDecoder()
+    # Header declaring a length above the 16 MiB cap is a protocol violation.
+    oversize_header = mp.struct.Struct(">BI").pack(
+        mp.FrameType.DATA, mp.MAX_FRAME_LEN + 1
+    )
+    with pytest.raises(mp.ProtocolError):
+        dec.feed(oversize_header)
 ```
+
+(Add `import pytest` to the top of the test file.)
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -222,11 +234,19 @@ Expected: FAIL — `AttributeError: ... 'FrameDecoder'`
 ```python
 # src/jfterm/muxer_proto.py  (append)
 
+MAX_FRAME_LEN = 16 * 1024 * 1024  # 16 MiB hard cap per PROTOCOL-v1 §2
+
+
+class ProtocolError(Exception):
+    """A wire-format violation; the connection must be closed."""
+
+
 class FrameDecoder:
     """Accumulates bytes and yields complete (type, value) frames.
 
     Tolerant of arbitrary chunk boundaries: a frame split across feed() calls
-    (even inside the 5-byte header) is buffered until complete.
+    (even inside the 5-byte header) is buffered until complete. A declared
+    length above MAX_FRAME_LEN raises ProtocolError (caller closes the socket).
     """
 
     def __init__(self) -> None:
@@ -239,6 +259,8 @@ class FrameDecoder:
             if len(self._buf) < _HEADER.size:
                 break
             ftype, length = _HEADER.unpack_from(self._buf, 0)
+            if length > MAX_FRAME_LEN:
+                raise ProtocolError(f"frame length {length} exceeds {MAX_FRAME_LEN}")
             end = _HEADER.size + length
             if len(self._buf) < end:
                 break
@@ -373,7 +395,7 @@ def test_binds_with_attach_or_open_on_construction():
         "session_id": "sess-1",
         "cwd": "/tmp",
         "argv": ["/bin/bash", "-l"],
-        "want_chunks": None,
+        "want_chunks": 0,
         "cols": 80,
         "rows": 24,
     }
@@ -442,7 +464,7 @@ class RemotePtyProxy(GObject.Object):
         argv: list[str],
         cols: int,
         rows: int,
-        want_chunks: int | None = None,
+        want_chunks: int = 0,
         send_after_open: str | None = None,
     ) -> None:
         super().__init__()
@@ -502,10 +524,15 @@ class RemotePtyProxy(GObject.Object):
         except OSError:
             self._detach_cleanup()
             return False
-        if not chunk:  # EOF: daemon gone or forced detach
+        if not chunk:  # EOF: takeover/detach or daemon gone (NOT a child exit)
             self._detach_cleanup()
             return False
-        for ftype, value in self._dec.feed(chunk):
+        try:
+            frames = self._dec.feed(chunk)
+        except mp.ProtocolError:
+            self._detach_cleanup()
+            return False
+        for ftype, value in frames:
             self._dispatch(ftype, value)
         return True
 
@@ -516,9 +543,15 @@ class RemotePtyProxy(GObject.Object):
             obj = json.loads(value) if value else {}
             if "running" in obj:
                 self.emit("running-changed", bool(obj["running"]))
-            progress = obj.get("progress")
-            if progress is not None:
-                self.emit("progress-changed", int(progress[0]), int(progress[1]))
+            if "progress" in obj:
+                # Protocol gives a scalar 0-100 or null; map onto the existing
+                # (state, value) progress-changed signal: null -> hidden (0, 0),
+                # else set (1, value).
+                progress = obj["progress"]
+                if progress is None:
+                    self.emit("progress-changed", 0, 0)
+                else:
+                    self.emit("progress-changed", 1, int(progress))
         elif ftype == mp.FrameType.EXIT:
             obj = json.loads(value) if value else {}
             self.emit("child-exited", int(obj.get("status", 0)))
@@ -588,10 +621,13 @@ def test_status_frame_emits_running_and_progress():
     progress: list[tuple[int, int]] = []
     p.connect("running-changed", lambda _p, r: running.append(r))
     p.connect("progress-changed", lambda _p, s, v: progress.append((s, v)))
-    fake.push_json(mp.FrameType.STATUS, {"running": True, "progress": [1, 42]})
+    # Protocol: progress is a scalar 0-100 or null.
+    fake.push_json(mp.FrameType.STATUS, {"running": True, "progress": 42})
     p._on_readable(fake.client_sock.fileno(), GLib.IOCondition.IN)
-    assert running == [True]
-    assert progress == [(1, 42)]
+    fake.push_json(mp.FrameType.STATUS, {"running": False, "progress": None})
+    p._on_readable(fake.client_sock.fileno(), GLib.IOCondition.IN)
+    assert running == [True, False]
+    assert progress == [(1, 42), (0, 0)]  # 42 -> set(1,42); null -> hidden(0,0)
     fake.close()
 
 
@@ -637,34 +673,32 @@ git add src/jfterm/remote_pty_proxy.py tests/test_remote_pty_proxy.py
 git commit -m "feat(muxer): RemotePtyProxy write/resize and STATUS/EXIT dispatch"
 ```
 
-### Task 2.4: `close(signal, grace_ms)` vs `detach()`
+### Task 2.4: `close(grace_ms)` vs `detach()`
 
 **Files:**
 - Modify: `src/jfterm/remote_pty_proxy.py`
 - Test: `tests/test_remote_pty_proxy.py`
 
-**Why two methods:** `close()` sends a `CLOSE` frame (kill the shell) then tears down; `detach()` tears down *without* `CLOSE`, leaving the daemon session alive. Both are idempotent. Window-close calls `detach()` on every session; tab-close calls `close()`.
+**Why two methods:** `close()` sends a `CLOSE{grace_ms}` frame (the daemon SIGHUPs the shell's process group, escalating to SIGKILL after `grace_ms` if set) then tears down; `detach()` tears down *without* `CLOSE`, leaving the daemon session alive. The client does **not** choose the signal — per PROTOCOL-v1 §5, `CLOSE` carries only `grace_ms`. Both are idempotent. Window-close calls `detach()` on every session; tab-close calls `close()`.
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
 # tests/test_remote_pty_proxy.py  (append)
-def test_close_sends_close_frame_with_signal_and_grace():
+def test_close_sends_close_frame_with_grace():
     fake = FakeMuxer()
     p = _proxy(fake)
-    p.close(signal="SIGTERM", grace_ms=1500)
+    p.close(grace_ms=1500)
     frames = fake.read_json_frames()
-    assert frames == [(mp.FrameType.CLOSE, {"signal": "SIGTERM", "grace_ms": 1500})]
+    assert frames == [(mp.FrameType.CLOSE, {"grace_ms": 1500})]
     fake.close()
 
 
-def test_close_default_is_sighup_no_grace():
+def test_close_default_grace_is_zero():
     fake = FakeMuxer()
     p = _proxy(fake)
     p.close()
-    assert fake.read_json_frames() == [
-        (mp.FrameType.CLOSE, {"signal": "SIGHUP", "grace_ms": 0})
-    ]
+    assert fake.read_json_frames() == [(mp.FrameType.CLOSE, {"grace_ms": 0})]
     fake.close()
 
 
@@ -695,15 +729,13 @@ Expected: FAIL — `AttributeError: 'RemotePtyProxy' object has no attribute 'cl
 ```python
 # src/jfterm/remote_pty_proxy.py  (add methods to the class)
 
-    def close(self, signal: str = "SIGHUP", grace_ms: int = 0) -> None:
-        """Kill the daemon session, then tear down. Idempotent."""
+    def close(self, grace_ms: int = 0) -> None:
+        """Kill the daemon session and tear down. Idempotent. The daemon SIGHUPs
+        the shell's process group, escalating to SIGKILL after grace_ms if set;
+        signal choice/escalation lives in the daemon, not the client."""
         if self._closed:
             return
-        self._send(
-            mp.encode_json_frame(
-                mp.FrameType.CLOSE, {"signal": signal, "grace_ms": grace_ms}
-            )
-        )
+        self._send(mp.encode_json_frame(mp.FrameType.CLOSE, {"grace_ms": grace_ms}))
         self._detach_cleanup()
 
     def detach(self) -> None:
@@ -1398,12 +1430,12 @@ git add src/jfterm/window.py
 git commit -m "feat(muxer): spawn tabs through the muxer with a fresh session_id"
 ```
 
-### Task 6.3: Rewire restart to `CLOSE{SIGTERM,1500}` + new `session_id`
+### Task 6.3: Rewire restart to `CLOSE{grace_ms:1500}` + new `session_id`
 
 **Files:**
 - Modify: `src/jfterm/window.py:546-610` (`_on_restart_tab`), `:611-695` (`_restart_linked_tab`)
 
-**Design note:** The old client-side `os.kill(old_pid, SIGTERM)` + 1.5s `_force_kill` block is deleted — the daemon owns escalation. Restart now: `old_terminal._proxy.close(signal="SIGTERM", grace_ms=1500)`, mint a new `session_id`, build a fresh terminal bound to it.
+**Design note:** The old client-side `os.kill(old_pid, SIGTERM)` + 1.5s `_force_kill` block is deleted — the daemon owns the kill + escalation (SIGHUP, then SIGKILL after the grace). Restart now: `old_terminal._proxy.close(grace_ms=1500)`, mint a new `session_id`, build a fresh terminal bound to it.
 
 - [ ] **Step 1: Replace the kill block in `_on_restart_tab`**
 
@@ -1412,8 +1444,8 @@ Delete the `old_pid` capture, the `os.kill(...SIGTERM)` call, and the entire `_f
 ```python
         old_terminal = tab.terminal
         if old_terminal is not None:
-            # Daemon owns SIGTERM->grace->SIGKILL escalation; client just asks.
-            old_terminal._proxy.close(signal="SIGTERM", grace_ms=1500)
+            # Daemon owns SIGHUP->grace->SIGKILL escalation; client just asks.
+            old_terminal._proxy.close(grace_ms=1500)
             self.terminal_stack.remove(old_terminal)
 
         tab.session_id = uuid.uuid4().hex
@@ -1430,7 +1462,7 @@ Delete the `old_pid` capture, the `os.kill(...SIGTERM)` call, and the entire `_f
 
 Delete the now-obsolete `tab.shell_pid = None` / `tab.pty_fd = None` lines (`window.py:592-593`) — those fields are vestigial under the muxer.
 
-- [ ] **Step 2: Apply the same replacement to `_restart_linked_tab`** (`window.py:611-695`): swap the kill/`_force_kill` block for `old_terminal._proxy.close(signal="SIGTERM", grace_ms=1500)`, mint `tab.session_id = uuid.uuid4().hex`, and build the new terminal through the muxer.
+- [ ] **Step 2: Apply the same replacement to `_restart_linked_tab`** (`window.py:611-695`): swap the kill/`_force_kill` block for `old_terminal._proxy.close(grace_ms=1500)`, mint `tab.session_id = uuid.uuid4().hex`, and build the new terminal through the muxer.
 
 - [ ] **Step 3: Update the existing restart test** — `test_window.py` has a restart-related test (`test_on_close_tab_is_noop_when_tab_is_restarting`). Run it to confirm the `is_restarting` guard path is unaffected:
 
@@ -1441,7 +1473,7 @@ Expected: PASS
 
 ```bash
 git add src/jfterm/window.py
-git commit -m "feat(muxer): restart via CLOSE{SIGTERM,1500} and a new session_id"
+git commit -m "feat(muxer): restart via CLOSE{grace_ms:1500} and a new session_id"
 ```
 
 ### Task 6.4: Tab close sends `CLOSE`; window close detaches all sessions
@@ -1449,7 +1481,7 @@ git commit -m "feat(muxer): restart via CLOSE{SIGTERM,1500} and a new session_id
 **Files:**
 - Modify: `src/jfterm/window.py:507-545` (`_on_close_tab`), `:1301-1310` (`_on_close_request`)
 
-**Design note:** Per-tab close kills that shell (`CLOSE{SIGHUP,0}`); the eager `_proxy.close()` already does this once `close()` defaults to SIGHUP. Window close must **detach** every session so shells survive — call `detach()` on each proxy *before* GTK dispose runs (dispose calls `_proxy.close()`, which becomes a no-op once detached).
+**Design note:** Per-tab close kills that shell (`CLOSE{grace_ms:0}` → daemon SIGHUP); the eager `_proxy.close()` already does this with the default `grace_ms=0`. Window close must **detach** every session so shells survive — call `detach()` on each proxy *before* GTK dispose runs (dispose calls `_proxy.close()`, which becomes a no-op once detached).
 
 - [ ] **Step 1: Confirm `_on_close_tab`'s eager close is correct** — at `window.py:520-522`, `terminal._proxy.close()` now defaults to `CLOSE{SIGHUP,0}`. No change needed beyond verifying the call site still reads `terminal._proxy.close()`.
 
@@ -1564,13 +1596,13 @@ These steps require the `jftermd` binary on `PATH`. They cannot pass until the m
 - [ ] **Step 3:** Run a long-lived TUI (`vim` or `htop`), then **close the JFTerm window**. Expected: window closes, `jftermd` still running (`pgrep jftermd`), shell still alive.
 - [ ] **Step 4:** Relaunch JFTerm. Expected: the session reappears as a tab in **Unsorted**, `vim`/`htop` repaints cleanly (alt-screen redraw via the attach SIGWINCH), scrollback intact.
 - [ ] **Step 5:** Verify replay-safety: a program that printed to the clipboard (OSC 52) before detach does **not** re-clobber the clipboard on reattach; the bell does not machine-gun on replay.
-- [ ] **Step 6:** Restart a command tab via the ↻ control. Expected: old shell dies (SIGTERM, then SIGKILL after ~1.5s if it ignores it), a fresh shell opens and re-runs the command; no key collision, tab stays in place.
-- [ ] **Step 7:** Close a single tab via ✕. Expected: that shell is killed (`CLOSE{SIGHUP,0}`); other sessions unaffected.
+- [ ] **Step 6:** Restart a command tab via the ↻ control. Expected: old shell dies (daemon SIGHUP, then SIGKILL after ~1.5s if it ignores it), a fresh shell opens and re-runs the command; no key collision, tab stays in place.
+- [ ] **Step 7:** Close a single tab via ✕. Expected: that shell is killed (`CLOSE{grace_ms:0}` → daemon SIGHUP); other sessions unaffected.
 
 ### Task 8.2: Record any protocol divergence
 
-- [ ] **Step 1:** If the real daemon's frame shapes differ from `muxer_proto.py`, reconcile: update `muxer_proto.py` + `tests/fake_muxer.py` to match the muxer repo's `PROTOCOL.md`, bump `PROTO_VERSION` if the wire format changed, and re-run Phases 1–7 tests.
-- [ ] **Step 2:** Commit any reconciliation as `fix(muxer): align client protocol with jftermd PROTOCOL.md vN`.
+- [ ] **Step 1:** If the real daemon's frame shapes differ from `muxer_proto.py`, reconcile: update `muxer_proto.py` + `tests/fake_muxer.py` to match the muxer repo's `docs/PROTOCOL-v1.md`, bump `PROTO_VERSION` if the wire format changed, and re-run Phases 1–7 tests.
+- [ ] **Step 2:** Commit any reconciliation as `fix(muxer): align client protocol with jftermd PROTOCOL-v1.md`.
 
 ---
 
@@ -1579,7 +1611,7 @@ These steps require the `jftermd` binary on `PATH`. They cannot pass until the m
 **Spec coverage (v1 scope):**
 - `RemotePtyProxy` drop-in with identical signals → Phase 2. ✓
 - TLV protocol (HELLO/LIST/ATTACH_OR_OPEN/INPUT/RESIZE/CLOSE/DATA/STATUS/EXIT) → Phases 1–3. ✓
-- `CLOSE{signal, grace_ms}` + daemon-owned escalation (client side) → Tasks 2.4, 6.3. ✓
+- `CLOSE{grace_ms}` (no client-chosen signal) + daemon-owned SIGHUP→SIGKILL escalation (client side) → Tasks 2.4, 6.3. ✓
 - Launch reconciliation v1 (adopt all into Unsorted) → Task 6.1. ✓
 - `session_id` as runtime per-tab pointer, distinct from `Tab.id` → Phase 4; restart mints a new one → Task 6.3. ✓
 - Exit policy v1 (window close detaches, tab close kills) → Task 6.4. ✓
@@ -1590,6 +1622,6 @@ These steps require the `jftermd` binary on `PATH`. They cannot pass until the m
 
 **Placeholder scan:** No "TBD"/"handle errors"/"similar to". Steps gated on the real daemon are marked **[GATED: real jftermd]** with concrete manual actions, not vague stubs.
 
-**Type/name consistency:** `RemotePtyProxy.__init__(sock, *, session_id, cwd, argv, cols, rows, want_chunks=None, send_after_open=None)`; `close(signal="SIGHUP", grace_ms=0)`; `detach()`; `resize(rows, cols)`; `write(bytes)`. `MuxerClient.list_sessions()/connect_session()/control()/close()`. `JFTermTerminal(muxer, session_id, *, cwd, argv, send_after_spawn, adopt, appearance)`. `FrameType` names match the spec's protocol table. These are used consistently across Phases 2, 3, 5, 6.
+**Type/name consistency:** `RemotePtyProxy.__init__(sock, *, session_id, cwd, argv, cols, rows, want_chunks=0, send_after_open=None)`; `close(grace_ms=0)`; `detach()`; `resize(rows, cols)`; `write(bytes)`. `MuxerClient.list_sessions()/connect_session()/control()/close()`. `JFTermTerminal(muxer, session_id, *, cwd, argv, send_after_spawn, adopt, appearance)`. `FrameType` names and JSON shapes match PROTOCOL-v1.md (`CLOSE{grace_ms}`, `STATUS.progress` scalar/null, `want_chunks` int with 0=full). Used consistently across Phases 2, 3, 5, 6.
 
 **Known caveat:** `terminal.py`'s `JFTermTerminal` constructs `RemotePtyProxy` at `__init__` time, which connects a socket — under tests that instantiate a real `JFTermTerminal` (rare; most tests are model-level) a running daemon or a fake would be required. The plan keeps `JFTermTerminal` construction out of unit tests (window tests operate on the model layer via `SimpleNamespace`), matching the existing test style.
