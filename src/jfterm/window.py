@@ -219,7 +219,10 @@ class JFTermWindow(Adw.ApplicationWindow):
 
     def _adopt_sessions(self, sessions: list[dict]) -> None:
         for info in sessions:
-            self._materialize_adopted_tab(info)
+            try:
+                self._materialize_adopted_tab(info)
+            except (ConnectionError, OSError) as exc:
+                logger.warning("failed to adopt session %s: %s", info.get("session_id"), exc)
 
     def _materialize_adopted_tab(self, info: dict) -> TerminalTab:
         cwd = info.get("cwd") or str(Path.home())
@@ -1351,7 +1354,7 @@ class JFTermWindow(Adw.ApplicationWindow):
         for group in self.ws.all_groups():
             for tab in group.tabs:
                 terminal = getattr(tab, "terminal", None)
-                if terminal is not None and terminal._proxy is not None:
+                if terminal is not None and getattr(terminal, "_proxy", None) is not None:
                     terminal._proxy.detach()
         self._muxer.close()
         # Block briefly so any queued project-save lands before we exit.
