@@ -3,7 +3,7 @@ import threading
 from pathlib import Path
 
 from jfterm import muxer_proto as mp
-from jfterm.muxer_client import hello, list_sessions, socket_path
+from jfterm.muxer_client import MuxerClient, hello, list_sessions, socket_path
 
 
 def test_socket_path_uses_xdg_runtime_dir(monkeypatch):
@@ -91,3 +91,19 @@ def test_list_sessions_returns_session_dicts(tmp_path):
     c.connect(str(sock_path))
     assert list_sessions(c) == sessions
     c.close()
+
+
+def test_connect_session_connects_to_existing_socket(tmp_path, monkeypatch):
+    sock_path = tmp_path / "jfterm" / "muxer.sock"
+    sock_path.parent.mkdir(parents=True)
+    monkeypatch.setattr("jfterm.muxer_client.socket_path", lambda: sock_path)
+
+    srv = mp_unix_server(sock_path)
+    accepted: list = []
+    threading.Thread(target=lambda: accepted.append(srv.accept()), daemon=True).start()
+
+    client = MuxerClient()
+    sess = client.connect_session()
+    assert sess.fileno() >= 0
+    sess.close()
+    srv.close()
