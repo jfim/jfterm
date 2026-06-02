@@ -91,6 +91,9 @@ class RemotePtyProxy(GObject.Object):
     def _on_readable(self, _fd: int, condition: GLib.IOCondition) -> bool:
         if self._closed:
             return False
+        if condition & GLib.IOCondition.HUP and not (condition & GLib.IOCondition.IN):
+            self._detach_cleanup()
+            return False
         try:
             chunk = self._sock.recv(self.READ_CHUNK)
         except BlockingIOError:
@@ -106,8 +109,12 @@ class RemotePtyProxy(GObject.Object):
         except mp.ProtocolError:
             self._detach_cleanup()
             return False
-        for ftype, value in frames:
-            self._dispatch(ftype, value)
+        try:
+            for ftype, value in frames:
+                self._dispatch(ftype, value)
+        except json.JSONDecodeError:
+            self._detach_cleanup()
+            return False
         return True
 
     def _dispatch(self, ftype: int, value: bytes) -> None:

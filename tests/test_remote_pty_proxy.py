@@ -128,3 +128,20 @@ def test_close_is_idempotent_after_detach():
     p.close()  # must not raise and must not send (socket already closed)
     assert fake.read_frames() == []
     fake.close()
+
+
+def test_send_after_open_sends_input_frame():
+    fake = FakeMuxer()
+    RemotePtyProxy(
+        fake.client_sock,
+        session_id="s",
+        cwd="/tmp",
+        argv=["x"],
+        cols=80,
+        rows=24,
+        send_after_open="ls",
+    )
+    frames = fake.read_frames()
+    assert frames[0][0] == mp.FrameType.ATTACH_OR_OPEN
+    assert frames[1] == (mp.FrameType.INPUT, b"ls\n")
+    fake.close()
