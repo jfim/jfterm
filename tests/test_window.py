@@ -125,3 +125,32 @@ def test_adopt_session_appends_terminal_tab_to_unsorted():
     ]
     JFTermWindow._adopt_sessions(fake_self, sessions)  # pyright: ignore[reportArgumentType]
     assert [t.session_id for t in ws.unsorted.tabs] == ["s1", "s2"]
+
+
+def test_close_request_detaches_all_sessions():
+    ws = Workspace()
+    p = ws.add_project(name="A", directory="/tmp/a")
+    detached = []
+
+    class FakeProxy:
+        def detach(self):
+            detached.append(self)
+
+    class FakeTerm:
+        def __init__(self):
+            self._proxy = FakeProxy()
+
+    t1 = SimpleNamespace(terminal=FakeTerm())
+    t2 = SimpleNamespace(terminal=FakeTerm())
+    p.tabs.extend([t1, t2])
+
+    fake_self = SimpleNamespace(
+        ws=ws,
+        _window_save_source=None,
+        _persist_window_geometry=lambda: None,
+        _muxer=SimpleNamespace(close=lambda: None),
+        _project_saver=SimpleNamespace(flush=lambda timeout=0: None),
+    )
+    result = JFTermWindow._on_close_request(fake_self, None)  # pyright: ignore[reportArgumentType]
+    assert result is False
+    assert len(detached) == 2
