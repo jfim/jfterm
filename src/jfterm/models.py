@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 
@@ -243,6 +245,28 @@ class Workspace:
         anchor = active_after[position]
         anchor_idx = self.projects.index(anchor)
         self.projects.insert(anchor_idx, project)
+
+    def project_for_cwd(self, cwd: str | None) -> Project | None:
+        """The active project whose directory contains `cwd`, matching by path
+        components (equal-or-under). When several match (nested projects), the
+        one with the longest directory wins. Returns None if nothing matches —
+        the caller falls back to Unsorted. Used to re-home adopted sessions to
+        their project at startup, keyed on the session's initial cwd."""
+        if not cwd:
+            return None
+        target = Path(os.path.normpath(cwd))
+        best: Project | None = None
+        best_depth = -1
+        for p in self.active_projects:
+            if not p.directory:
+                continue
+            base = Path(os.path.normpath(p.directory))
+            if target == base or target.is_relative_to(base):
+                depth = len(base.parts)
+                if depth > best_depth:
+                    best_depth = depth
+                    best = p
+        return best
 
     def _find_group(self, tab: Tab) -> Group:
         for g in (*self.projects, self.unsorted):

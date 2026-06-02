@@ -284,3 +284,56 @@ def test_linked_tab_has_session_id():
 def test_session_id_is_distinct_from_structural_id():
     t = TerminalTab()
     assert t.session_id != t.id
+
+
+def test_project_for_cwd_matches_exact_directory():
+    ws = Workspace()
+    p = ws.add_project(name="A", directory="/home/u/projects/a")
+    assert ws.project_for_cwd("/home/u/projects/a") is p
+
+
+def test_project_for_cwd_matches_subdirectory():
+    ws = Workspace()
+    p = ws.add_project(name="A", directory="/home/u/projects/a")
+    assert ws.project_for_cwd("/home/u/projects/a/src/deep") is p
+
+
+def test_project_for_cwd_returns_none_when_no_match():
+    ws = Workspace()
+    ws.add_project(name="A", directory="/home/u/projects/a")
+    assert ws.project_for_cwd("/home/u/elsewhere") is None
+
+
+def test_project_for_cwd_picks_longest_prefix():
+    ws = Workspace()
+    outer = ws.add_project(name="Outer", directory="/home/u/projects")
+    inner = ws.add_project(name="Inner", directory="/home/u/projects/a")
+    assert ws.project_for_cwd("/home/u/projects/a/src") is inner
+    assert ws.project_for_cwd("/home/u/projects/b") is outer
+
+
+def test_project_for_cwd_ignores_archived_projects():
+    ws = Workspace()
+    p = ws.add_project(name="A", directory="/home/u/projects/a")
+    p.archived = True
+    assert ws.project_for_cwd("/home/u/projects/a/src") is None
+
+
+def test_project_for_cwd_does_not_match_sibling_prefix():
+    # /home/u/projects/ab must not match a project rooted at /home/u/projects/a.
+    ws = Workspace()
+    ws.add_project(name="A", directory="/home/u/projects/a")
+    assert ws.project_for_cwd("/home/u/projects/ab") is None
+
+
+def test_project_for_cwd_normalizes_trailing_slash():
+    ws = Workspace()
+    p = ws.add_project(name="A", directory="/home/u/projects/a/")
+    assert ws.project_for_cwd("/home/u/projects/a") is p
+
+
+def test_project_for_cwd_none_or_empty_returns_none():
+    ws = Workspace()
+    ws.add_project(name="A", directory="/home/u/projects/a")
+    assert ws.project_for_cwd(None) is None
+    assert ws.project_for_cwd("") is None
