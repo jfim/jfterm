@@ -134,13 +134,13 @@ binding frame (see Protocol), not separate wire frames.
   handshake (see Protocol), then live frames.
 - **Detach** — client disconnects (clean or crash). Session keeps running; ring
   keeps filling. No data lost.
-- **Close (kill)** — `CLOSE{signal, grace_ms}` → daemon sends `signal` to the
-  shell, drops the session from the attachable map immediately, then reaps in the
-  background. If `grace_ms > 0` and the child has not exited by then, it escalates
-  to `SIGKILL` before reaping. The escalation lives in the daemon because only it
-  watches SIGCHLD — the client cannot observe when the child actually dies. Normal
-  tab/window close uses `{SIGHUP, 0}` (no escalation); **restart** uses
-  `{SIGTERM, 1500}`.
+- **Close (kill)** — `CLOSE{grace_ms}` → daemon sends `SIGHUP` to the shell's
+  process group, drops the session from the attachable map immediately, then reaps
+  in the background. If `grace_ms > 0` and the child has not exited by then, it
+  escalates to `SIGKILL` (process group) before reaping. The escalation lives in
+  the daemon because only it watches SIGCHLD — the client cannot observe when the
+  child actually dies, and does not choose the signal. Normal tab/window close
+  uses `{grace_ms: 0}` (SIGHUP only); **restart** uses `{grace_ms: 1500}`.
 - **Shell exits while detached** — session enters a `dead` state retaining its
   ring until reattach or a grace timeout; reattach replays the final output +
   `EXIT`, then the session is dropped.
@@ -208,6 +208,11 @@ No in-band "end of replay" marker is required.
 
 ## Wire protocol (TLV over the Unix socket)
 
+> **Authoritative contract:** the canonical protocol spec lives in the muxer repo
+> at `jfterm-muxer/docs/PROTOCOL-v1.md` (code source of truth:
+> `jftermd/src/protocol.rs`). The summary below is kept in sync with it; where
+> they differ, PROTOCOL-v1.md wins.
+
 Every message is one TLV frame:
 
 ```
@@ -235,7 +240,7 @@ every frame), plus one control connection per client.
 | `ATTACH_OR_OPEN` | C→D | `{session_id, cwd, argv, want_chunks, cols, rows}` — attach if exists, else open; race-free |
 | `INPUT` | C→D | raw keystroke bytes |
 | `RESIZE` | C→D | `{cols, rows}` |
-| `CLOSE` | C→D | `{signal, grace_ms}` — signal the shell + drop session; daemon escalates to SIGKILL after `grace_ms` if still alive |
+| `CLOSE` | C→D | `{grace_ms}` — daemon SIGHUPs the shell's process group + drops session; escalates to SIGKILL after `grace_ms` if still alive |
 | `DATA` | D→C | raw output bytes (feed into VTE) |
 | `STATUS` | D→C | `{running, progress}` — semantic dot state |
 | `EXIT` | D→C | `{status}` — shell child exited |
@@ -303,7 +308,7 @@ sessions, restoring each into its original group/position:
 ### Restart (client-side)
 
 Restart keeps the tab — its `Tab.id`, sidebar row, group, and position — and
-replaces the shell. The client sends `CLOSE{SIGTERM, 1500}` for the old
+replaces the shell. The client sends `CLOSE{grace_ms: 1500}` for the old
 `session_id`, mints a new `session_id` and points the tab at it, binds a fresh
 session with `ATTACH_OR_OPEN` (an OPEN, since the id is new) and re-runs
 `launched_command`. The new terminal appears immediately while the old child dies
@@ -319,7 +324,7 @@ id and reattach to the dying shell.)
 disconnects the sockets without `CLOSE`, leaving every session running so they
 reappear on relaunch (this is what makes the feature demonstrable). Closing a
 single **tab** (the ✕, a shell exit, or the close-tab shortcut) sends
-`CLOSE{SIGHUP, 0}` and kills that one shell. This is purely a client/UI decision;
+`CLOSE{grace_ms: 0}` and kills that one shell. This is purely a client/UI decision;
 the daemon supports both kill and detach.
 
 **v2:** a richer split — an explicit "Quit, killing all terminals" alongside the
@@ -345,10 +350,11 @@ jftermd lives in its own repo, so this section is the implementation contract.
   continuously into the ring whether or not a client is attached; reap via
   SIGCHLD; enter `dead` (ring retained) on shell exit while detached; self-exit a
   short grace period after the last session ends.
-- **CLOSE with escalation:** on `CLOSE{signal, grace_ms}`, send `signal`, drop the
-  session from the attachable map immediately, reap in the background, and
-  escalate to `SIGKILL` after `grace_ms` if the child has not exited. The daemon
-  owns the escalation because only it observes SIGCHLD.
+- **CLOSE with escalation:** on `CLOSE{grace_ms}`, send `SIGHUP` to the shell's
+  process group, drop the session from the attachable map immediately, reap in the
+  background, and escalate to `SIGKILL` after `grace_ms` if the child has not
+  exited. The daemon owns signal choice + escalation because only it observes
+  SIGCHLD.
 - **Chunk ring & sanitization:** 128 KB soft, ground-state-cut chunks; per-chunk
   synthesized `state_prologue`; purge-on-clear; strip OSC 52 / OSC 9 / OSC 777 /
   BEL / DSR / DA / cursor-reports from *stored* data while passing them live.
@@ -415,8 +421,8 @@ design.
 socket, `bash --norc`):
 
 - Lifecycle: `OPEN` drains into the ring before any attach; `ATTACH` replays;
-  `CLOSE{SIGHUP,0}` reaps without escalation while `CLOSE{SIGTERM,grace}` escalates
-  to SIGKILL when the child ignores SIGTERM; socket drop detaches without killing;
+  `CLOSE{grace_ms:0}` reaps without escalation while `CLOSE{grace_ms:N}` escalates
+  to SIGKILL when the child ignores SIGHUP; socket drop detaches without killing;
   shell-exit-while-detached retains a `dead` session whose reattach replays final
   output + `EXIT`.
 - Protocol: TLV encode/decode round-trip; malformed frame closes the connection;
