@@ -236,7 +236,8 @@ class JFTermWindow(Adw.ApplicationWindow):
             self._select_tab(first)
 
     def _materialize_adopted_tab(self, info: dict) -> TerminalTab:
-        cwd = info.get("cwd") or str(Path.home())
+        raw_cwd = info.get("cwd")
+        cwd = raw_cwd or str(Path.home())
         argv = info.get("argv") or []
         terminal = JFTermTerminal(
             self._muxer,
@@ -255,7 +256,9 @@ class JFTermWindow(Adw.ApplicationWindow):
         )
         self._wire_terminal(tab, terminal)
         self.terminal_stack.add_child(terminal)
-        self.ws.unsorted.add_tab(tab)
+        # Re-home the session to its project (by initial cwd), else Unsorted.
+        group = self.ws.project_for_cwd(raw_cwd) or self.ws.unsorted
+        group.add_tab(tab)
         self.sidebar.refresh()
         return tab
 
