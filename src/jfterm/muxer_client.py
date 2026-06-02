@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import socket
 import subprocess
@@ -19,22 +20,20 @@ def socket_path() -> Path:
 
 def _recv_one_frame(sock: socket.socket) -> tuple[int, bytes]:
     """Blocking read of exactly one TLV frame from a (blocking) socket."""
-    import json as _json  # noqa: F401  (kept local; see decode helpers)
-
     dec = mp.FrameDecoder()
     while True:
         chunk = sock.recv(65536)
         if not chunk:
             raise ConnectionError("muxer closed during frame read")
         frames = dec.feed(chunk)
+        # Control exchanges are strict request/response: at most one frame
+        # per reply, so returning the first is sufficient.
         if frames:
             return frames[0]
 
 
 def hello(sock: socket.socket) -> dict:
     """Send HELLO, return the daemon's HELLO_OK payload. Raises on mismatch."""
-    import json
-
     sock.sendall(mp.encode_json_frame(mp.FrameType.HELLO, {"proto_version": mp.PROTO_VERSION}))
     ftype, value = _recv_one_frame(sock)
     if ftype != mp.FrameType.HELLO_OK:
@@ -49,8 +48,6 @@ def hello(sock: socket.socket) -> dict:
 
 def list_sessions(sock: socket.socket) -> list[dict]:
     """Send LIST, return the SESSIONS array."""
-    import json
-
     sock.sendall(mp.encode_frame(mp.FrameType.LIST, b""))
     ftype, value = _recv_one_frame(sock)
     if ftype != mp.FrameType.SESSIONS:
@@ -90,9 +87,7 @@ class MuxerClient:
             return self._connect_raw()
         except (FileNotFoundError, ConnectionRefusedError):
             # Stale socket file → unlink; then (re)spawn and retry.
-            with contextlib.suppress(FileNotFoundError):
-                if socket_path().exists():
-                    socket_path().unlink()
+            socket_path().unlink(missing_ok=True)
             self._spawn_daemon()
         for _ in range(self.SPAWN_RETRIES):
             try:
@@ -105,7 +100,11 @@ class MuxerClient:
         """Lazily establish the HELLO-validated control connection."""
         if self._control is None:
             sock = self._connect_or_spawn()
-            hello(sock)
+            try:
+                hello(sock)
+            except Exception:
+                sock.close()
+                raise
             self._control = sock
         return self._control
 
