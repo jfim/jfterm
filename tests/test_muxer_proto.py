@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from jfterm import muxer_proto as mp
 
 
@@ -31,3 +33,37 @@ def test_encode_json_frame_roundtrips_shape():
     assert ftype == mp.FrameType.RESIZE
     assert length == len(payload)
     assert json.loads(payload) == {"cols": 80, "rows": 24}
+
+
+def test_decoder_yields_complete_frames():
+    dec = mp.FrameDecoder()
+    buf = mp.encode_frame(mp.FrameType.DATA, b"abc") + mp.encode_frame(
+        mp.FrameType.EXIT, b"{}"
+    )
+    frames = dec.feed(buf)
+    assert frames == [(mp.FrameType.DATA, b"abc"), (mp.FrameType.EXIT, b"{}")]
+
+
+def test_decoder_handles_split_across_feeds():
+    dec = mp.FrameDecoder()
+    full = mp.encode_frame(mp.FrameType.DATA, b"hello")
+    # Split mid-value.
+    assert dec.feed(full[:3]) == []
+    assert dec.feed(full[3:]) == [(mp.FrameType.DATA, b"hello")]
+
+
+def test_decoder_handles_split_inside_header():
+    dec = mp.FrameDecoder()
+    full = mp.encode_frame(mp.FrameType.INPUT, b"x")
+    assert dec.feed(full[:2]) == []  # header is 5 bytes
+    assert dec.feed(full[2:]) == [(mp.FrameType.INPUT, b"x")]
+
+
+def test_decoder_rejects_oversize_frame():
+    dec = mp.FrameDecoder()
+    # Header declaring a length above the 16 MiB cap is a protocol violation.
+    oversize_header = mp.struct.Struct(">BI").pack(
+        mp.FrameType.DATA, mp.MAX_FRAME_LEN + 1
+    )
+    with pytest.raises(mp.ProtocolError):
+        dec.feed(oversize_header)
