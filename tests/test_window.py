@@ -111,7 +111,7 @@ def test_adopt_session_appends_terminal_tab_to_unsorted():
 
     def fake_materialize(info):
         tab = SimpleNamespace(session_id=info["session_id"], title=info.get("argv", ["?"])[0])
-        ws.unsorted.tabs.append(tab)
+        ws.unsorted.tabs.append(tab)  # pyright: ignore[reportArgumentType]
         created.append(tab)
         return tab
 
@@ -124,7 +124,7 @@ def test_adopt_session_appends_terminal_tab_to_unsorted():
         {"session_id": "s2", "argv": ["vim"], "cwd": "/home"},
     ]
     JFTermWindow._adopt_sessions(fake_self, sessions)  # pyright: ignore[reportArgumentType]
-    assert [t.session_id for t in ws.unsorted.tabs] == ["s1", "s2"]
+    assert [t.session_id for t in ws.unsorted.tabs] == ["s1", "s2"]  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_close_request_detaches_all_sessions():
@@ -142,7 +142,7 @@ def test_close_request_detaches_all_sessions():
 
     t1 = SimpleNamespace(terminal=FakeTerm())
     t2 = SimpleNamespace(terminal=FakeTerm())
-    p.tabs.extend([t1, t2])
+    p.tabs.extend([t1, t2])  # pyright: ignore[reportArgumentType]
 
     fake_self = SimpleNamespace(
         ws=ws,
