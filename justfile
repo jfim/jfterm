@@ -50,9 +50,19 @@ install_dir   := `echo "$HOME/.local/share/jfterm"`
 bin_dir       := `echo "$HOME/.local/bin"`
 apps_dir      := `echo "$HOME/.local/share/applications"`
 icon_dir      := `echo "$HOME/.local/share/icons/hicolor/scalable/apps"`
+prefix_dir    := `echo "$HOME/.local"`
 
-# Install jfterm as a desktop application (user-local).
-install:
+# Git remote for the jftermd muxer daemon (override with JFTERM_MUXER_REPO).
+muxer_repo    := env_var_or_default("JFTERM_MUXER_REPO", "https://github.com/jfim/jfterm-muxer")
+
+# Build and install the jftermd muxer daemon to ~/.local/bin (cargo required).
+install-muxer:
+    @command -v cargo >/dev/null 2>&1 || { echo "error: 'cargo' not found on PATH. Install Rust (https://rustup.rs) or add ~/.cargo/bin to PATH, then re-run."; exit 1; }
+    cargo install jftermd --git "{{muxer_repo}}" --locked --force --root "{{prefix_dir}}"
+    @echo "jftermd installed to {{bin_dir}}/jftermd"
+
+# Install jfterm as a desktop application (user-local), incl. the jftermd daemon.
+install: install-muxer
     uv venv --system-site-packages --python 3.12 "{{install_dir}}/venv"
     uv pip install --reinstall --python "{{install_dir}}/venv/bin/python" .
     install -Dm755 packaging/jfterm.sh "{{bin_dir}}/jfterm"
@@ -65,6 +75,7 @@ install:
 # Remove the desktop install.
 uninstall:
     rm -f "{{bin_dir}}/jfterm"
+    rm -f "{{bin_dir}}/jftermd"
     rm -f "{{apps_dir}}/dev.jfim.jfterm.desktop"
     rm -f "{{icon_dir}}/dev.jfim.jfterm.svg"
     rm -rf "{{install_dir}}"
