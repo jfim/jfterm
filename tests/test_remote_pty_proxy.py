@@ -94,3 +94,37 @@ def test_exit_frame_emits_child_exited():
     p._on_readable(fake.client_sock.fileno(), GLib.IOCondition.IN)
     assert statuses == [0]
     fake.close()
+
+
+def test_close_sends_close_frame_with_grace():
+    fake = FakeMuxer()
+    p = _proxy(fake)
+    p.close(grace_ms=1500)
+    frames = fake.read_json_frames()
+    assert frames == [(mp.FrameType.CLOSE, {"grace_ms": 1500})]
+    fake.close()
+
+
+def test_close_default_grace_is_zero():
+    fake = FakeMuxer()
+    p = _proxy(fake)
+    p.close()
+    assert fake.read_json_frames() == [(mp.FrameType.CLOSE, {"grace_ms": 0})]
+    fake.close()
+
+
+def test_detach_sends_no_frame():
+    fake = FakeMuxer()
+    p = _proxy(fake)
+    p.detach()
+    assert fake.read_frames() == []
+    fake.close()
+
+
+def test_close_is_idempotent_after_detach():
+    fake = FakeMuxer()
+    p = _proxy(fake)
+    p.detach()
+    p.close()  # must not raise and must not send (socket already closed)
+    assert fake.read_frames() == []
+    fake.close()
