@@ -42,3 +42,55 @@ def test_data_frame_emits_data_ready():
     proxy._on_readable(fake.client_sock.fileno(), GLib.IOCondition.IN)
     assert seen == [b"output bytes"]
     fake.close()
+
+
+def _proxy(fake):
+    p = RemotePtyProxy(fake.client_sock, session_id="s", cwd="/tmp", argv=["x"], cols=80, rows=24)
+    fake.read_frames()  # drain the ATTACH_OR_OPEN
+    return p
+
+
+def test_write_sends_input_frame():
+    fake = FakeMuxer()
+    p = _proxy(fake)
+    p.write(b"ls\n")
+    frames = fake.read_frames()
+    assert frames == [(mp.FrameType.INPUT, b"ls\n")]
+    fake.close()
+
+
+def test_resize_sends_resize_json():
+    fake = FakeMuxer()
+    p = _proxy(fake)
+    p.resize(40, 120)  # rows, cols (PtyProxy signature)
+    frames = fake.read_json_frames()
+    assert frames == [(mp.FrameType.RESIZE, {"cols": 120, "rows": 40})]
+    fake.close()
+
+
+def test_status_frame_emits_running_and_progress():
+    fake = FakeMuxer()
+    p = _proxy(fake)
+    running: list[bool] = []
+    progress: list[tuple[int, int]] = []
+    p.connect("running-changed", lambda _p, r: running.append(r))
+    p.connect("progress-changed", lambda _p, s, v: progress.append((s, v)))
+    # Protocol: progress is a scalar 0-100 or null.
+    fake.push_json(mp.FrameType.STATUS, {"running": True, "progress": 42})
+    p._on_readable(fake.client_sock.fileno(), GLib.IOCondition.IN)
+    fake.push_json(mp.FrameType.STATUS, {"running": False, "progress": None})
+    p._on_readable(fake.client_sock.fileno(), GLib.IOCondition.IN)
+    assert running == [True, False]
+    assert progress == [(1, 42), (0, 0)]  # 42 -> set(1,42); null -> hidden(0,0)
+    fake.close()
+
+
+def test_exit_frame_emits_child_exited():
+    fake = FakeMuxer()
+    p = _proxy(fake)
+    statuses: list[int] = []
+    p.connect("child-exited", lambda _p, s: statuses.append(s))
+    fake.push_json(mp.FrameType.EXIT, {"status": 0})
+    p._on_readable(fake.client_sock.fileno(), GLib.IOCondition.IN)
+    assert statuses == [0]
+    fake.close()
