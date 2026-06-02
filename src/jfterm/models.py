@@ -46,6 +46,11 @@ class Tab:
 class TerminalTab(Tab):
     # Runtime-only fields populated when a real terminal is attached:
     terminal: Any = None
+    # Daemon session this tab currently points at. Distinct from `id` (the
+    # tab's structural identity) so restart can swap shells without a key
+    # collision. Runtime-only in v1 (rediscovered from the daemon's LIST on
+    # relaunch); not persisted to disk yet.
+    session_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     shell_pid: int | None = None
     pty_fd: int | None = None
     current_cwd: str | None = None
@@ -99,6 +104,11 @@ class LinkedTab(Tab):
 
     # Runtime widgets (populated when the tab is materialised):
     terminal: Any = None
+    # Daemon session this tab currently points at. Distinct from `id` (the
+    # tab's structural identity) so restart can swap shells without a key
+    # collision. Runtime-only in v1 (rediscovered from the daemon's LIST on
+    # relaunch); not persisted to disk yet.
+    session_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     web_view: Any = None
     paned: Any = None
 

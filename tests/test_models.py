@@ -1,7 +1,10 @@
+import uuid
+
 import pytest
 
 from jfterm.models import (
     FlashCommand,
+    LinkedTab,
     Project,
     Tab,
     TerminalTab,
@@ -263,3 +266,21 @@ def test_linked_tab_widget_returns_paned():
     sentinel = object()
     t = LinkedTab(paned=sentinel)
     assert t.widget is sentinel
+
+
+def test_terminal_tab_has_unique_session_id():
+    a = TerminalTab()
+    b = TerminalTab()
+    assert a.session_id != b.session_id
+    # Valid uuid4 hex.
+    uuid.UUID(hex=a.session_id)
+
+
+def test_linked_tab_has_session_id():
+    t = LinkedTab()
+    uuid.UUID(hex=t.session_id)
+
+
+def test_session_id_is_distinct_from_structural_id():
+    t = TerminalTab()
+    assert t.session_id != t.id
