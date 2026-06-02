@@ -1,4 +1,5 @@
 import json
+import struct
 
 import pytest
 
@@ -28,7 +29,7 @@ def test_encode_frame_raw_bytes():
 def test_encode_json_frame_roundtrips_shape():
     frame = mp.encode_json_frame(mp.FrameType.RESIZE, {"cols": 80, "rows": 24})
     ftype = frame[0]
-    (length,) = mp.struct.Struct(">I").unpack(frame[1:5])
+    (length,) = struct.Struct(">I").unpack(frame[1:5])
     payload = frame[5:]
     assert ftype == mp.FrameType.RESIZE
     assert length == len(payload)
@@ -60,6 +61,6 @@ def test_decoder_handles_split_inside_header():
 def test_decoder_rejects_oversize_frame():
     dec = mp.FrameDecoder()
     # Header declaring a length above the 16 MiB cap is a protocol violation.
-    oversize_header = mp.struct.Struct(">BI").pack(mp.FrameType.DATA, mp.MAX_FRAME_LEN + 1)
+    oversize_header = struct.Struct(">BI").pack(mp.FrameType.DATA, mp.MAX_FRAME_LEN + 1)
     with pytest.raises(mp.ProtocolError):
         dec.feed(oversize_header)
