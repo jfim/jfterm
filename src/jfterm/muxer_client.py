@@ -74,25 +74,33 @@ class MuxerClient:
         s.connect(str(socket_path()))
         return s
 
-    def _spawn_daemon(self) -> None:
-        """Self-spawn jftermd, detached from this process (setsid)."""
+    def _spawn_daemon(self) -> subprocess.Popen[bytes]:
+        """Self-spawn jftermd, detached from this process (setsid), then reap it."""
         socket_path().parent.mkdir(parents=True, exist_ok=True)
         # start_new_session=True == setsid; the daemon owns its own double-fork
         # + flock lockfile to win spawn races (see spec "Daemon unreachable").
-        subprocess.Popen(
+        proc = subprocess.Popen(
             ["jftermd"],
             start_new_session=True,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+        # jftermd double-forks: the process we launched exits the moment it has
+        # spawned the detached daemon. Reap it so it does not linger as a
+        # `[jftermd] <defunct>` zombie until the next spawn or app exit.
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=self.SPAWN_RETRIES * self.SPAWN_DELAY)
+        return proc
 
     def _connect_or_spawn(self) -> socket.socket:
         try:
             return self._connect_raw()
         except (FileNotFoundError, ConnectionRefusedError):
-            # Stale socket file → unlink; then (re)spawn and retry.
-            socket_path().unlink(missing_ok=True)
+            # No daemon reachable → (re)spawn and retry. Stale-socket cleanup is
+            # the daemon's job under its flock, so we must NOT unlink the socket
+            # here: a transient refusal against a healthy daemon would otherwise
+            # delete its live socket and wedge it.
             self._spawn_daemon()
         for _ in range(self.SPAWN_RETRIES):
             try:
