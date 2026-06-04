@@ -37,7 +37,7 @@ run:
 
 # Create the dev virtualenv (with system site packages for gi/PyGObject).
 venv:
-    uv venv --system-site-packages --python 3.12
+    uv venv --system-site-packages --python-preference only-system
     uv sync
 
 # Sync dev dependencies.
@@ -63,7 +63,7 @@ install-muxer:
 
 # Install jfterm as a desktop application (user-local), incl. the jftermd daemon.
 install: install-muxer
-    uv venv --system-site-packages --python 3.12 "{{install_dir}}/venv"
+    uv venv --system-site-packages --python-preference only-system "{{install_dir}}/venv"
     uv pip install --reinstall --python "{{install_dir}}/venv/bin/python" .
     install -Dm755 packaging/jfterm.sh "{{bin_dir}}/jfterm"
     install -Dm644 data/dev.jfim.jfterm.desktop "{{apps_dir}}/dev.jfim.jfterm.desktop"
