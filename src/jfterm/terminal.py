@@ -50,6 +50,13 @@ class JFTermTerminal(Vte.Terminal):
         appearance: AppSettings | None = None,
     ) -> None:
         super().__init__()
+        # This widget is a pty-less renderer (the real pty lives in jftermd),
+        # so VTE has no termios to resolve the erase char from. Pin the erase
+        # bindings explicitly: with AUTO/TTY, VTE 0.84.0 (Ubuntu build) aborts
+        # in map_erase_binding ("auto_mode != eTTY") at startup. ASCII_DELETE
+        # sends 0x7f, matching the inner pty's default VERASE.
+        self.set_backspace_binding(Vte.EraseBinding.ASCII_DELETE)
+        self.set_delete_binding(Vte.EraseBinding.DELETE_SEQUENCE)
         self._initial_cwd = cwd or str(Path.home())
         self.session_id = session_id
 
