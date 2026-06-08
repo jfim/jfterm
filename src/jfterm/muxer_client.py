@@ -76,7 +76,13 @@ class MuxerClient:
 
     def _spawn_daemon(self) -> subprocess.Popen[bytes]:
         """Self-spawn jftermd, detached from this process (setsid), then reap it."""
-        socket_path().parent.mkdir(parents=True, exist_ok=True)
+        # jftermd aborts at startup unless the socket dir is exactly 0700
+        # (PROTOCOL-v1: "parent directory is created 0700"). mkdir's mode is
+        # masked by the umask (0002 → 0775) and is a no-op if the dir already
+        # exists, so chmod explicitly to enforce 0700 in both cases.
+        sock_dir = socket_path().parent
+        sock_dir.mkdir(parents=True, exist_ok=True)
+        sock_dir.chmod(0o700)
         # start_new_session=True == setsid; the daemon owns its own double-fork
         # + flock lockfile to win spawn races (see spec "Daemon unreachable").
         proc = subprocess.Popen(
