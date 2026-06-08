@@ -173,6 +173,37 @@ def test_spawn_daemon_reaps_double_fork_child(tmp_path, monkeypatch):
         os.waitpid(captured["pid"], 0)
 
 
+def test_spawn_daemon_creates_socket_dir_0700(tmp_path, monkeypatch):
+    # PROTOCOL-v1 §"parent directory is created 0700": jftermd aborts at startup
+    # if the socket dir is not 0700, so the client must create it that way
+    # regardless of the user's umask (e.g. 0002 yields 0775 by default).
+    sock_path = tmp_path / "jfterm" / "muxer.sock"
+    monkeypatch.setattr("jfterm.muxer_client.socket_path", lambda: sock_path)
+    monkeypatch.setattr("jfterm.muxer_client.subprocess.Popen", lambda *a, **k: _FakeProc())
+
+    old_umask = os.umask(0o002)
+    try:
+        MuxerClient()._spawn_daemon()
+    finally:
+        os.umask(old_umask)
+
+    assert (sock_path.parent.stat().st_mode & 0o777) == 0o700
+
+
+def test_spawn_daemon_tightens_preexisting_loose_dir(tmp_path, monkeypatch):
+    # A dir left at 0775 by an earlier run must be tightened to 0700, otherwise
+    # jftermd keeps aborting and the client never connects.
+    sock_path = tmp_path / "jfterm" / "muxer.sock"
+    sock_path.parent.mkdir(parents=True)
+    sock_path.parent.chmod(0o775)
+    monkeypatch.setattr("jfterm.muxer_client.socket_path", lambda: sock_path)
+    monkeypatch.setattr("jfterm.muxer_client.subprocess.Popen", lambda *a, **k: _FakeProc())
+
+    MuxerClient()._spawn_daemon()
+
+    assert (sock_path.parent.stat().st_mode & 0o777) == 0o700
+
+
 def test_connect_session_connects_to_existing_socket(tmp_path, monkeypatch):
     sock_path = tmp_path / "jfterm" / "muxer.sock"
     sock_path.parent.mkdir(parents=True)
